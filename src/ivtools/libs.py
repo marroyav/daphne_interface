@@ -2,13 +2,13 @@
 Libraries to talk with specific hardware in daphne
 """
 from time import sleep
+from . import oei
 import numpy as np
 import time
 
-
 class Command:
     def __init__(self,ip, cmd_string, get_response=True):
-        self.device = OEI(ip)
+        self.device = oei.OEI(ip)
         self.cmd_bytes = [ord(ch) for ch in cmd_string]
         self.cmd_bytes.append(0x0d)
         for i in range(0, len(self.cmd_bytes), 50):

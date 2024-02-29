@@ -1,6 +1,8 @@
 # Ignoring common build directories
 build/
 install/
+dist/
+data/*
 *.egg-info
 
 # Ignoring plot results
