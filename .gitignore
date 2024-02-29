@@ -3,6 +3,7 @@ build/
 install/
 dist/
 data/*
+!data/keep
 *.egg-info
 
 # Ignoring plot results
