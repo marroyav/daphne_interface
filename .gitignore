@@ -1,0 +1,13 @@
+# Ignoring common build directories
+build/
+install/
+*.egg-info
+
+# Ignoring plot results
+*.pdf
+*.svg
+*.png
+*.jpg
+*.gif
+*.root
+*.ROOT
