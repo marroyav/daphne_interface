@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import time, os, fnmatch, shutil, uproot, click
 from tqdm import tqdm
 
-
 @click.command()
 @click.option("--steps", '-s', default=5,help="DAC counts per step")
 @click.option("--ip_address", '-ip', default='10.73.137.113',help="IP Address")
@@ -71,8 +70,11 @@ def main(steps,ip_address):
             ecurrent.append(k.current)
             dac_trim.append(v)
         #end_timestamp = time.strftime('%b-%d-%Y_%H%M', time.localtime())
-        fpp=np.gradient(ecurrent)
-        breakd_v=[dac_trim[np.argmin(fpp)]]
+        x=np.add(ecurrent,np.average(ecurrent[-50:]))
+        f=np.add(np.log(x),0)
+        fpp=np.multiply((np.multiply(np.gradient(f),1/f)),-1)
+        #fpp=np.gradient(ecurrent)
+        breakd_v=[dac_trim[np.argmax(fpp)]]
         name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
         f = uproot.recreate(name + '.root')
         f["tree/IV"] = ({'current': np.array(ecurrent),'trim': np.array(dac_trim)})
@@ -83,7 +85,7 @@ def main(steps,ip_address):
         # Plotting code
         plt.figure()
         plt.plot(dac_trim, ecurrent, ',', linewidth=1, markersize=1, 
-                 label=f'ch{ch}: BIAS {fbk_value if ch in fbk else hpk_value}, Trim {dac_trim[np.argmin(fpp)]}')
+                 label=f'ch{ch}: BIAS {fbk_value if ch in fbk else hpk_value}, Trim {dac_trim[np.argmax(fpp)]}')
         plt.plot(dac_trim, fpp, ',', linewidth=1, markersize=1, color='r')
         plt.title(f'IV curve for APA {apa} AFE {ch//8} and ch {ch}')
         plt.xlabel('V DAC counts')
