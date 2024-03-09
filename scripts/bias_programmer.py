@@ -23,7 +23,7 @@ def main(ip_address):
     enable_bias=ivtools.Command(ip, f'WR VBIASCTRL V {4000}')
 
     for i in range (5):
-        ivtools.Command(ip, f'WR BIASSET AFE {i} V {map[ip][i]}')
+        ivtools.Command(ip, f'WR BIASSET AFE {i} V {map[ip][i]-15}')
 
     read_bias=ivtools.ReadVoltages(ip)
     print(read_bias.b_vector)

@@ -5,6 +5,10 @@ from time import sleep
 from . import oei
 import numpy as np
 import time
+import unicodedata
+
+def remove_control_characters(s):
+    return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
 
 class Command:
     def __init__(self,ip, cmd_string, get_response=True):
@@ -32,7 +36,7 @@ class Command:
             sleep(0.005)
             self.more -= 1
         response = response + chr(0)
-        return response
+        return remove_control_characters(response)
 
 class ReadCurrent:
     def __init__(self, ip, ch=0, iterations=1):
@@ -40,11 +44,11 @@ class ReadCurrent:
         for _ in range(iterations):
             try:
                 response = Command(ip, f'RD CM CH {ch}').response
-                self.current_avg.append(float(response.split("(mV)=")[1][:7]))
+                self.current_avg.append(float(response.split("(mV)= -")[1][:7]))
                 # print (response)
             except Exception as e:
                 print(f"Error reading current: {e}")
-        self.current = np.multiply(np.mean(self.current_avg),-1)
+        self.current = np.mean(self.current_avg)
 
 class ReadVoltages:
     def __init__(self, ip):
