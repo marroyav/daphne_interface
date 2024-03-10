@@ -33,7 +33,7 @@ class Command:
                 elif chr(b).isprintable:
                     self.more = 40
                     response = response + chr(b)
-            sleep(0.005)
+            sleep(0.007)
             self.more -= 1
         response = response + chr(0)
         return remove_control_characters(response)
@@ -43,12 +43,13 @@ class ReadCurrent:
         self.current_avg = []
         for _ in range(iterations):
             try:
-                response = Command(ip, f'RD CM CH {ch}').response
-                self.current_avg.append(float(response.split("(mV)= -")[1][:7]))
-                # print (response)
+                cmd = Command(ip, f'RD CM CH {ch}')
+                response = float(cmd.response.split("(mV)=")[1][:7])
+                self.current_avg.append(response)
+                cmd.device.close
             except Exception as e:
                 print(f"Error reading current: {e}")
-        self.current = np.mean(self.current_avg)
+        self.current = np.multiply(np.mean(self.current_avg),-1)
 
 class ReadVoltages:
     def __init__(self, ip):

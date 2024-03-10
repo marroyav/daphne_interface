@@ -61,9 +61,9 @@ def main(steps,ip_address):
         evl_bias=[]
         ecurrent=[]
         bias_value = hpk_value if ch in hpk else fbk_value
-        set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bias_value}')]
+        set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bias_value-450}')]
         #init_timestamp = time.strftime('%b-%d-%Y_%H%M', time.localtime())                                                                                                                                                                                                                   
-        for v in tqdm(range(bias_value-350, bias_value, steps), desc=f"Taking ch_{ch}..."):
+        for v in tqdm(range(bias_value-450, bias_value, steps), desc=f"Taking ch_{ch}..."):
             apply_bias_cmd = ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {v}')
             k = ivtools.ReadCurrent(ip, ch=ch)
             measurement=k.current
@@ -89,7 +89,7 @@ def main(steps,ip_address):
         plt.legend(loc='upper left')                          
         #plt.show() 
         plt.savefig(f'ivCurvesEndpoint{ch}.png', bbox_extra_artists=(), bbox_inches='tight')                                                                                                                                                                                               
-
+#
     disable_bias=ivtools.Command(ip, f'WR VBIASCTRL V {0}')
     set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {i} V {0}') for i in range (5)]
     apply_trim=[ivtools.Command(ip, f'WR TRIM CH {i} V {0}')for i in range (40)]
