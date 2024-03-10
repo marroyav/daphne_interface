@@ -61,15 +61,16 @@ def main(steps,ip_address):
         evl_bias=[]
         ecurrent=[]
         bias_value = hpk_value if ch in hpk else fbk_value
-        set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bias_value-450}')]
+        set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bias_value-220}')]
         #init_timestamp = time.strftime('%b-%d-%Y_%H%M', time.localtime())                                                                                                                                                                                                                   
-        for v in tqdm(range(bias_value-450, bias_value, steps), desc=f"Taking ch_{ch}..."):
+        for v in tqdm(range(bias_value-220, bias_value, steps), desc=f"Taking ch_{ch}..."):
             apply_bias_cmd = ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {v}')
             k = ivtools.ReadCurrent(ip, ch=ch)
             measurement=k.current
             ecurrent.append(measurement)
             dac_bias.append(v)
             if measurement > 400:
+                time.sleep(0.02)
                 break
         #breakd_v=[dac_trim[np.argmax(fpp)]]
         name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
