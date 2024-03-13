@@ -62,7 +62,7 @@ def main(steps,ip_address):
         ecurrent=[]
         bias_value = hpk_value if ch in hpk else fbk_value
         set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bias_value-270}')]
-        other_channels=list (filter(lambda x :x!=5 and ch//8 == x//8, fbk+hpk))
+        other_channels=list (filter(lambda x :x!=ch and ch//8 == x//8, fbk+hpk))
         for i in other_channels:
             ivtools.Command(ip, f'WR TRIM CH {i} V {4096}')
         for v in tqdm(range(bias_value-270, bias_value, steps), desc=f"Taking ch_{ch}..."):
