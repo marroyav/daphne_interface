@@ -75,19 +75,21 @@ def main(steps,ip_address):
         for v in tqdm(range(bias_value-150, bias_value, steps), desc=f"Taking ch_{ch}..."):
             apply_bias_cmd = ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {v}')
             k = ivtools.ReadCurrent(ip, ch=ch)
+            measurement=k.current
             ecurrent.append(k.current)
             dac_bias.append(v)
-
-            if len(ecurrent) > 8:
-               macurrent = np.convolve(np.array(ecurrent), np.ones(8)/8, mode='valid')
-               if macurrent[len(macurrent)-1] > 400:
-                  time.sleep(0.02)
+            if measurement > 400:
+                  time.sleep(0.05)
                   break
-                  apply_trim_cmd = ivtools.Command(ip, f'WR TRIM CH {ch} V {4096}')
 
-            if k.current > 600:
-		time.sleep(0.02)
-                break
+            # if len(ecurrent) > 8:
+            #    macurrent = np.convolve(np.array(ecurrent), np.ones(8)/8, mode='valid')
+            #    if macurrent[len(macurrent)-1] > 400:
+            #       time.sleep(0.02)
+            #       break
+                #   apply_trim_cmd = ivtools.Command(ip, f'WR TRIM CH {ch} V {4096}')
+
+      
         #breakd_v=[dac_trim[np.argmax(fpp)]]
 
         name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
