@@ -1,11 +1,15 @@
 """                                                               
 Simple IV scanner using both the BIAS and TRIM controls in DAPHNE   
 """
-import numpy as np
 import ivtools
 import matplotlib.pyplot as plt
-import time, os, fnmatch, shutil, uproot, click
+import fnmatch, shutil,  click
+
 from tqdm import tqdm
+from time import localtime, strftime, sleep
+from os import getcwd, chdir, mkdir
+from uproot import recreate
+from numpy import array, ones, convolve
 
 @click.command()
 @click.option("--steps", '-s', default=5,help="DAC counts per step")
@@ -40,15 +44,15 @@ def main(steps,ip_address):
     fbk_value = map[ip_address]['fbk_value']
     hpk_value = map[ip_address]['hpk_value']
 
-    print(os.getcwd())
-    print(time.localtime())
-    t = time.localtime()
-    timestamp = time.strftime('%b-%d-%Y_%H%M', t)
+    print(getcwd())
+    print(localtime())
+    t = localtime()
+    timestamp = strftime('%b-%d-%Y_%H%M', t)
     BACKUP_NAME = ("backup-" + timestamp)
     directory = f'B_{timestamp}_IvCurves_np04_apa{apa}_ip{ip}'
-    os.chdir('../data/')
-    os.mkdir(directory)
-    os.chdir(directory)
+    chdir('../data/')
+    mkdir(directory)
+    chdir(directory)
 
     disable_bias=ivtools.Command(ip, f'WR VBIASCTRL V {0}')
     set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {i} V {0}') for i in range (5)]
@@ -79,20 +83,20 @@ def main(steps,ip_address):
             dac_bias.append(v)
 
             if len(ecurrent) > 8:
-               macurrent = np.convolve(np.array(ecurrent), np.ones(8)/8, mode='valid')
+               macurrent = convolve(array(ecurrent), ones(8)/8, mode='valid')
                if macurrent[len(macurrent)-1] > 400:
-                  time.sleep(0.02)
+                  sleep(0.02)
                   break
                   apply_trim_cmd = ivtools.Command(ip, f'WR TRIM CH {ch} V {4096}')
 
             if k.current > 600:
-		time.sleep(0.02)
+		sleep(0.02)
                 break
         #breakd_v=[dac_trim[np.argmax(fpp)]]
 
         name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
-        f = uproot.recreate(name + '.root')
-        f["tree/IV"] = ({'current': np.array(ecurrent),'bias': np.array(dac_bias)})
+        f = recreate(name + '.root')
+        f["tree/IV"] = ({'current': array(ecurrent),'bias': array(dac_bias)})
 
         # Plotting code 
         plt.figure()
