@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import click
+import numpy as np
+import json 
+
 from os import chdir, listdir
-from numpy import array, log, gradient, nan_to_num, argmax, power, exp, isinf, sort, convolve, ones, concatenate, arange, inf, max
 from uproot import recreate
 from uproot import open as op
 from scipy.optimize import curve_fit
@@ -29,21 +31,18 @@ map = {
 
 def derivative(bias, current):
     x = current
-    f = log(x[len(x)/2:])
-    fpp=gradient(gradient(f))
-    fpp = nan_to_num(fpp)    
-    nbdv=bias[len(bias)/2:][argmax(fpp)]
+    f = np.log(x[len(x)/4:])
+    fpp=np.gradient(np.gradient(f))
+    fpp = np.nan_to_num(fpp)    
+    nbdv=bias[len(bias)/4:][np.argmax(fpp)]
     return nbdv
-    
-def fit_pulse(t, t0, T, A, P):
-    x = (array(t) - t0+T)/T
-    return P+A*power(x,3)*exp(3*(1-x))
 
-def fit_pol(x, a, b, c, d, e, f):
-    return a*power(x, 5) + b*power(x, 4) + c*power(x, 3) + d*power(x, 2) + e*x + f
+def fit_pulse(t, t0, T, A, P):
+    x = (np.array(t) - t0+T)/T
+    return P+A*np.power(x,3)*np.exp(3*(1-x))
 
 def IV_relative(bias, current):
-    
+
     b = bias/100
     c = current
 
@@ -51,44 +50,43 @@ def IV_relative(bias, current):
     if len(bias)>20:
 
         # Computing the relative derivative
-        der_y = gradient(c)
+        der_y = np.gradient(c)
         rel_y = der_y/c
-        rel_y = nan_to_num(rel_y)
+        rel_y = np.nan_to_num(rel_y)
 
         # Checking if the data doesn't have infinite values
-        if sort(isinf(rel_y))[len(rel_y)-1] == False:
+        if np.sort(np.isinf(rel_y))[len(rel_y)-1] == False:
 
             # Computing a moving avarage with n=2, just to remove some noise
-            n = 2            
-            rel_yma = convolve(rel_y, ones(n)/n, mode='valid')
+            n = 2
+            rel_yma = np.convolve(rel_y, np.ones(n)/n, mode='valid')
             x_ma = b[n-1:]
 
-            # Using a fit of high order polynomial to estimate the peak region
-            pt,pv  = curve_fit(fit_pol, array(x_ma), array(rel_yma))
             n_cut = 5
-            y_pol = fit_pol(x_ma, pt[0],  pt[1],  pt[2],  pt[3],  pt[4],  pt[5])[n_cut:]              
-            index = (argmax(y_pol)+ n_cut) - 5 # Selecting a position before the peak
+            pol = (np.poly1d(np.polyfit(np.array(x_ma), np.array(rel_yma), 5)))
+            y_pol = pol(x_ma)[n_cut:]
+            index = (np.argmax(y_pol)+ n_cut) - 5 # Selecting a position before the peak
 
             # Applying a movinga avrage with 8 points for the region before the peak, to make it smoother
             if index > 16:
-                y_before = convolve(rel_yma[:(index)], ones(8)/8, mode='valid')
-                y = concatenate((y_before, rel_yma[index:]))
-                index = [num for num in range(len(y)) if y[num] == rel_yma[argmax(y_pol) + n_cut]][0] - 5
-                
+                y_before = np.convolve(rel_yma[:(index)], np.ones(8)/8, mode='valid')
+                y = np.concatenate((y_before, rel_yma[index:]))
+                index = [num for num in range(len(y)) if y[num] == rel_yma[np.argmax(y_pol) + n_cut]][0] - 5
+
                 x_before = x_ma[8-1:(index)]
-                x = concatenate((x_before, x_ma[index:])) 
+                x = np.concatenate((x_before, x_ma[index:]))
             else:
                 x = x_ma
                 y = rel_yma
 
-            # Choosing boundaries values for the fitting 
+            # Choosing boundaries values for the fitting
             if x[index+5] > 5:
                 min_guess = x[index]
-                max_guess = x[index + 5] 
+                max_guess = x[index + 5]
             else:
                 min_guess = 0
-                max_guess = 5                
-            x_bias = arange(x[index], x[len(x)-1], 0.01)
+                max_guess = 5
+            x_bias = np.arange(x[index], x[len(x)-1], 0.01)
 
             # Fit using a pulse shape function
             try:
@@ -97,26 +95,26 @@ def IV_relative(bias, current):
 
                 if len(y_fit2) > 1:
                     STATUS = 'GOOD'
-                    breakdown = x_bias[argmax(y_fit2)]
+                    breakdown = x_bias[np.argmax(y_fit2)]
+                    return breakdown*100
                 else:
-                    STATUS = 'BAD'
+                    return 0
 
                 #plt.plot(b, rel_y, '+', label = 'Raw')
                 #plt.plot(x, y, '+', label = 'Filtered' )
-                #plt.plot(x_bias, y_fit2, label = 'Fitting') 
+                #plt.plot(x_bias, y_fit2, 'k', label = 'Fitting')
+                #plt.vlines(breakdown, -1, 4, colors='b', linestyles='dashed', label = 'Breakdown')
+                #plt.xlabel('Bias x 100 (DAC)')
+                #plt.ylabel('dI/dV (1/I)')
+                #plt.legend()
                 #plt.show()
-                    
+
             except:
-                STATUS = 'BAD'
+                return 0
         else:
-            STATUS = 'BAD'
+            return 0
     else:
-        STATUS = 'BAD'
-
-    if  STATUS == 'BAD':
-        breakdown = 0
-
-    return(breakdown*100)
+        return 0
 
 @click.command()
 @click.option("--dir", default = '../data')
@@ -164,16 +162,12 @@ def main(dir):
            bk.append(values)
 
     chdir(dir)
-    m = open("mapBias.py", "w+") 
-    m.write('map = {')
-    for i in range(len(ip)):
-        if i != len(ip)-1:
-            line = f" '{ip[i]}' = {bk[i]}, \n"
-        else:
-            line = f" '{ip[i]}' = {bk[i]}  \n"
-        m.write(line)
-    m.write('}')
-    m.close()
+    dir = {}
+    for ip in ip:
+        i = ip.index(ip)
+        dir[ip] =  bk[i]
+    with open("bias_map.json", "w") as outfile: 
+        json.dump(dir, outfile)
     print('Done')
 
 if __name__ == "__main__":
