@@ -14,7 +14,7 @@ from numpy import array
 
 @click.command()
 @click.option("--bias_step", '-bs', default=10,help="DAC counts per step - bias")
-@click.option("--trim_step", '-ts', default=20,help="DAC counts per step - trim")
+@click.option("--trim_step", '-ts', default=40,help="DAC counts per step - trim")
 @click.option("--ip_address", '-ip', default='10.73.137.113',help="IP Address")
 def main(bias_step,trim_step,ip_address):
     ip=ip_address
@@ -33,9 +33,9 @@ def main(bias_step,trim_step,ip_address):
        16, 17, 18, 19, 20, 21, 22, 23],
        'hpk': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
        'fbk_value':1085,'hpk_value':1590},
-   '10.73.137.112': {'apa': 4, 'fbk': [],
+    '10.73.137.112': {'apa': 4, 'fbk': [],
        'hpk': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-           19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 37, 39],
+        19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 37, 39],
        'fbk_value':0,'hpk_value':1580},
     '10.73.137.113': {'apa': 4, 'fbk': [0,2,5,7], 'hpk': [],'fbk_value':1040,'hpk_value':0},
     #'10.73.137.113': {'apa': 4, 'fbk': [0], 'hpk': [],'fbk_value':1040,'hpk_value':0}
@@ -62,11 +62,10 @@ def main(bias_step,trim_step,ip_address):
     apply_trim=[ivtools.Command(ip, f'WR TRIM CH {i} V {0}')for i in range (40)]
     enable_bias=ivtools.Command(ip, f'WR VBIASCTRL V {4000}')
     for ch in fbk + hpk:
-        breakd_v=[]
-        dac_trim=[]
-        dac_bias=[]
-        evl_bias=[]
+        trim_dac=[]
         ecurrent=[]
+        bias_dac=[]
+        time_start = [strftime('%b-%d-%Y_%H%M', t)]
         bias_value = hpk_value if ch in hpk else fbk_value
         set_bias=[ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bias_value-270}')]
         other_channels=list (filter(lambda x :x!=5 and ch//8 == x//8, fbk+hpk))
@@ -76,30 +75,25 @@ def main(bias_step,trim_step,ip_address):
             apply_bias_cmd = ivtools.Command(ip, f'WR BIASSET AFE {ch//8} V {bv}')
             k = ivtools.ReadCurrent(ip, ch=ch)
             measurement=k.current
-            #ecurrent.append(measurement)
-            #dac_bias.append(bv)
             if measurement > 100:
-                #sleep(1.)
-                #break
-                ###### ADDED PART #####
+                bias_dac.append(bv)
                 for tv in tqdm(range(0, 2500, trim_step), desc=f"Running trim scan on ch_{ch}..."):
                     apply_trim_cmd = ivtools.Command(ip, f'WR TRIM CH {ch} V {tv}')
                     k = ivtools.ReadCurrent(ip, ch=ch)
                     measurement=k.current
                     ecurrent.append(measurement)
-                    dac_bias.append(tv)
+                    trim_dac.append(tv)
+                name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
+                time_end = [strftime('%b-%d-%Y_%H%M', t)]
+                f = recreate(name + '.root')
+                f["tree/IV"] = ({'current': array(ecurrent),'trim': array(trim_dac)})
+                f["tree/run"] = ({'bias': array(bias_dac),'time_start': array(time_start),'time_end': array(time_end)})
                 break
-                ### END ADDED PART ###
-        #breakd_v=[dac_trim[np.argmax(fpp)]]
-        name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
-        f = recreate(name + '.root')
-        f["tree/IV"] = ({'current': array(ecurrent),'bias': array(dac_bias)})
-
         ## Plotting code 
         #plt.figure()
-        #plt.plot(dac_bias, ecurrent, ',', linewidth=1, markersize=1,
+        #plt.plot(trim_dac, ecurrent, ',', linewidth=1, markersize=1,
         #        label=f'ch{ch}: BIAS {fbk_value if ch in fbk else hpk_value}')
-        ##plt.plot(dac_bias, fpp, ',', linewidth=1, markersize=1, color='r')
+        ##plt.plot(trim_dac, fpp, ',', linewidth=1, markersize=1, color='r')
         #plt.title(f'IV curve for APA {apa} AFE {ch//8} and ch {ch}')                                                                                                   #                                                    
         #plt.xlabel('V DAC counts')                           
         #plt.ylabel('Ln(I) U.A.')
