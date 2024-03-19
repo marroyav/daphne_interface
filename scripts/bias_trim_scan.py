@@ -67,11 +67,10 @@ def ivscan(ip,bs,ts):
             interface.command(f'WR TRIM CH {i} V {4096}')
         for bv in tqdm(range(bias_value-400, bias_value, bs), desc=f"Running bias scan on ch_{ch}..."):
             apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {bv}')
-            k = interface.read_current(ch=ch,iterations=3)
+            k = interface.read_current(ch=ch,iterations=2)
             bias_dac.append(bv)
             bias_measured.append(interface.read_bias()[ch//8])
             if k > 100:
-                bias_dac.append(bv)
                 for tv in tqdm(range(0, 2500, ts), desc=f"Running trim scan on ch_{ch}..."):
                     apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {tv}')
                     ecurrent.append(interface.read_current(ch=ch,iterations=3))
@@ -81,7 +80,7 @@ def ivscan(ip,bs,ts):
                 f = recreate(name + '.root')
                 f["tree/bias"] = ({'bias_dac': array(bias_dac),'bias_v': array(bias_measured)})
                 f["tree/iv_trim"] = ({'current': array(ecurrent),'trim': array(trim_dac)})
-                f["tree/run"] = ({'bias': array(bias_dac),'time_start':array(time_start),'time_end': array(time_end)})
+                f["tree/run"] = ({'time_start':array(time_start),'time_end': array(time_end)})
 
 
                 disable_bias=interface.command( f'WR VBIASCTRL V {0}')
