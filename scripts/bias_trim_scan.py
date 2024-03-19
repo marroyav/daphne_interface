@@ -13,7 +13,7 @@ from numpy import array
 
 def ivscan(ip,bs,ts):
 
-    map = {
+map = {
    '10.73.137.104': {'apa': 1, 'fbk': [0, 1, 2, 3, 4, 5, 6, 7],
        'hpk': [8, 9, 10, 11, 12, 13, 14, 15],'fbk_value':1060,'hpk_value':1560},
    '10.73.137.105': {'apa': 1, 'fbk': [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 15],
@@ -33,7 +33,6 @@ def ivscan(ip,bs,ts):
        'fbk_value':0,'hpk_value':1580},
     '10.73.137.113': {'apa': 4, 'fbk': [0,2,5,7], 'hpk': [],'fbk_value':1040,'hpk_value':0},
 }
-
     apa = map[ip]['apa']
     fbk = map[ip]['fbk']
     hpk = map[ip]['hpk']
