@@ -5,8 +5,10 @@ from time import sleep
 from numpy import mean
 import time
 import unicodedata
+import socket
+import struct
 
-
+class interface(object):
 
     def __init__(self,ipaddr,port=2001):
         self.sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -75,7 +77,7 @@ import unicodedata
                 self.current = [float(self.command(f'RD CM CH {ch}').split("(mV)= -")[1][:9]) for i in range (iterations)]
             except:
                 pass
-        return numpy.mean(self.current)
+        return mean(self.current)
 
     def read_bias(self):
         info=self.command(f'RD VM ALL')

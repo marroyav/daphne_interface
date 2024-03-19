@@ -1,2 +1,1 @@
-from .oei import OEI
-from .libs import *
+from .DaphneInterface import interface
