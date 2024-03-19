@@ -82,12 +82,15 @@ def ivscan(ip,bs,ts):
                 f["tree/iv_trim"] = ({'current': array(ecurrent),'trim': array(trim_dac)})
                 f["tree/run"] = ({'time_start':array(time_start),'time_end': array(time_end)})
 
+                channels_afe=list (filter(lambda x: ch//8 == x//8, fbk+hpk))
+                for i in channels_afe:
+                    interface.command(f'WR TRIM CH {i} V {0}')
 
-                disable_bias=interface.command( f'WR VBIASCTRL V {0}')
-                set_bias=[interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (5)]
-                apply_trim=[interface.command( f'WR TRIM CH {i} V {0}') for i in range (40)]
                 break
 
+    disable_bias=interface.command( f'WR VBIASCTRL V {0}')
+    set_bias=[interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (5)]
+    apply_trim=[interface.command( f'WR TRIM CH {i} V {0}') for i in range (40)]
     interface.close()
 
 
