@@ -72,11 +72,15 @@ class interface(object):
 
     def read_current(self, ch=0,iterations=3):
         self.current = None
-        while self.current is None:
+        while self.current is None and counter<400:
             try:
                 self.current = [float(self.command(f'RD CM CH {ch}').split("(mV)= -")[1][:9]) for i in range (iterations)]
+                counter+=1
             except:
-                pass
+                if counter>=400:
+                    self.close()
+                else:
+                    pass
         return mean(self.current)
 
     def read_bias(self):
