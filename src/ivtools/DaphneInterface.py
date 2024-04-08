@@ -72,6 +72,7 @@ class interface(object):
 
     def read_current(self, ch=0,iterations=3):
         self.current = None
+        counter=0
         while self.current is None and counter<400:
             try:
                 self.current = [float(self.command(f'RD CM CH {ch}').split("(mV)= -")[1][:9]) for i in range (iterations)]

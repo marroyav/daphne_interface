@@ -1,7 +1,7 @@
 import ivtools
 
-full_stream_ep=[]
-hi_rate_self_triggr_ep=[13]
+full_stream_ep=[13]
+hi_rate_self_triggr_ep=[]
 low_rate_self_triggr_ep=[]
 disable=[4,5,7,9,11,12]
 
@@ -27,7 +27,7 @@ for i in hi_rate_self_triggr_ep:
     print(f"data mode = {hex(thing.read_reg(0x3001,1)[2])}")
     thing.write_reg(0x6000,[16000])
     print(f"threshhold = {thing.read_reg(0x6000,1)[2]}")
-    thing.write_reg(0x6001,[0b11111111])
+    thing.write_reg(0x6001,[0b10100101])
     print(f"channels active = {thing.read_reg(0x6001,1)[2]}")
     #print(f"reg 0x5007 = {(thing.read_reg(0x5007,2))}")
 
@@ -40,7 +40,7 @@ for i in low_rate_self_triggr_ep:
     print(f"data mode = {hex(thing.read_reg(0x3001,1)[2])}")
     thing.write_reg(0x6000,[30])
     print(f"threshhold = {thing.read_reg(0x6000,1)[2]}")
-    thing.write_reg(0x6001,[0b11111111])
+    thing.write_reg(0x6001,[0b0])
     print(f"channels active = {thing.read_reg(0x6001,1)[2]}")
 
 
