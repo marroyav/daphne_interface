@@ -14,11 +14,14 @@ import json
 @click.command()
 @click.option("--map_file", '-map', default="iv_map.json",help="Input file with channel starting bias mapping")
 @click.option("--bias_step", '-bs', default=5,help="DAC counts per step")
-@click.option("--trim_step", '-ts', default=20,help="DAC counts per step")
+@click.option("--bias_start", '-bb', default=400,help="starting bias DAC counts before default value")
+@click.option("--trim_step", '-ts', default=20,help="trim DAC counts per step")
+@click.option("--trim_max", '-tm', default=2500,help="maximum trim DAC counts")
+
 @click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
 
-def main(map_file,bias_step,trim_step,ip_address):
-
+def main(map_file,bias_step,bias_start,trim_step,trim_max,ip_address):
+    
     with open(map_file, "r") as fp:
         map = json.load(fp)
         
@@ -61,7 +64,7 @@ def main(map_file,bias_step,trim_step,ip_address):
         time_start = [strftime('%b-%d-%Y_%H%M', time)]
 
         bias_value = hpk_value if ch in hpk else fbk_value
-        set_bias=[interface.command(f'WR BIASSET AFE {ch//8} V {bias_value-400}')]
+        set_bias=[interface.command(f'WR BIASSET AFE {ch//8} V {bias_value-bias_start}')]
 
         other_channels=list (filter(lambda x :x!=ch and ch//8 == x//8, fbk+hpk))
 
@@ -69,7 +72,7 @@ def main(map_file,bias_step,trim_step,ip_address):
 
             interface.command(f'WR TRIM CH {i} V {4096}')
 
-        for bv in tqdm(range(bias_value-400, bias_value, bias_step), desc=f"Running bias scan on ch_{ch}..."):
+        for bv in tqdm(range(bias_value-bias_start, bias_value, bias_step), desc=f"Running bias scan on ch_{ch}..."):
 
             apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {bv}')
             k = interface.read_current(ch=ch,iterations=2)
@@ -77,7 +80,7 @@ def main(map_file,bias_step,trim_step,ip_address):
             bias_measured.append(interface.read_bias()[ch//8])
 
             if k > 100:
-                for tv in tqdm(range(0, 2500, trim_step), desc=f"Running trim scan on ch_{ch}..."):
+                for tv in tqdm(range(0, trim_max, trim_step), desc=f"Running trim scan on ch_{ch}..."):
 
                     apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {tv}')
                     ecurrent.append(interface.read_current(ch=ch,iterations=3))
