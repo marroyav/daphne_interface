@@ -57,7 +57,7 @@ def main(map_file,bias_step,bias_start,trim_step,trim_max,ip_address):
     for ch in fbk + hpk:
 
         trim_dac=[]
-        ecurrent=[]
+        current_measured=[]
         bias_dac=[]
         bias_measured=[]
         
@@ -75,23 +75,25 @@ def main(map_file,bias_step,bias_start,trim_step,trim_max,ip_address):
         for bv in tqdm(range(bias_value-bias_start, bias_value, bias_step), desc=f"Running bias scan on ch_{ch}..."):
 
             apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {bv}')
-            k = interface.read_current(ch=ch,iterations=2)
+            current = interface.read_current(ch=ch,iterations=2)
+
             bias_dac.append(bv)
             bias_measured.append(interface.read_bias()[ch//8])
-
-            if k > 100:
+            bias_current.append(current)
+            
+            if current > 100:
                 for tv in tqdm(range(0, trim_max, trim_step), desc=f"Running trim scan on ch_{ch}..."):
 
                     apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {tv}')
-                    ecurrent.append(interface.read_current(ch=ch,iterations=3))
+                    current_measured.append(interface.read_current(ch=ch,iterations=4))
                     trim_dac.append(tv)
 
                 time_end = [strftime('%b-%d-%Y_%H%M', time)]
 
                 name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
                 f = recreate(name + '.root')
-                f["tree/bias"] = ({'bias_dac': array(bias_dac),'bias_v': array(bias_measured)})
-                f["tree/iv_trim"] = ({'current': array(ecurrent),'trim': array(trim_dac)})
+                f["tree/bias"] = ({'bias_dac': array(bias_dac),'bias_v': array(bias_measured),'current':array(bias_current)})
+                f["tree/iv_trim"] = ({'current': array(current_measured),'trim': array(trim_dac)})
                 f["tree/run"] = ({'time_start':array(time_start),'time_end': array(time_end)})
 
                 channels_afe=list (filter(lambda x: ch//8 == x//8, fbk+hpk))
