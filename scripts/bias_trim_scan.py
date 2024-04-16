@@ -13,11 +13,10 @@ import json
 
 @click.command()
 @click.option("--map_file", '-map', default="iv_map.json",help="Input file with channel starting bias mapping")
-@click.option("--bias_step", '-bs', default=5,help="DAC counts per step")
-@click.option("--bias_start", '-bb', default=400,help="starting bias DAC counts before default value")
-@click.option("--trim_step", '-ts', default=20,help="trim DAC counts per step")
+@click.option("--bias_step", '-bs', default=10,help="DAC counts per step")
+@click.option("--bias_start", '-bb', default=200,help="starting bias DAC counts before default value")
+@click.option("--trim_step", '-ts', default=40,help="trim DAC counts per step")
 @click.option("--trim_max", '-tm', default=2500,help="maximum trim DAC counts")
-
 @click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
 
 def main(map_file,bias_step,bias_start,trim_step,trim_max,ip_address):
@@ -57,14 +56,15 @@ def main(map_file,bias_step,bias_start,trim_step,trim_max,ip_address):
     for ch in fbk + hpk:
 
         trim_dac=[]
-        current_measured=[]
+        current_trim_scan=[]
         bias_dac=[]
-        bias_measured=[]
+        bias_volt=[]
+        current_bias_scan=[]
         
         time_start = [strftime('%b-%d-%Y_%H%M', time)]
 
-        bias_value = hpk_value if ch in hpk else fbk_value
-        set_bias=[interface.command(f'WR BIASSET AFE {ch//8} V {bias_value-bias_start}')]
+        bias_start_value = hpk_value if ch in hpk else fbk_value
+        set_bias=[interface.command(f'WR BIASSET AFE {ch//8} V {bias_start_value-bias_start}')]
 
         other_channels=list (filter(lambda x :x!=ch and ch//8 == x//8, fbk+hpk))
 
@@ -72,28 +72,28 @@ def main(map_file,bias_step,bias_start,trim_step,trim_max,ip_address):
 
             interface.command(f'WR TRIM CH {i} V {4096}')
 
-        for bv in tqdm(range(bias_value-bias_start, bias_value, bias_step), desc=f"Running bias scan on ch_{ch}..."):
+        for bv in tqdm(range(bias_start_value-bias_start, bias_start_value, bias_step), desc=f"Running bias scan on ch_{ch}..."):
 
             apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {bv}')
             current = interface.read_current(ch=ch,iterations=2)
 
             bias_dac.append(bv)
-            bias_measured.append(interface.read_bias()[ch//8])
-            bias_current.append(current)
+            bias_volt.append(interface.read_bias()[ch//8])
+            current_bias_scan.append(current)
             
             if current > 100:
                 for tv in tqdm(range(0, trim_max, trim_step), desc=f"Running trim scan on ch_{ch}..."):
 
                     apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {tv}')
-                    current_measured.append(interface.read_current(ch=ch,iterations=4))
+                    current_trim_scan.append(interface.read_current(ch=ch,iterations=4))
                     trim_dac.append(tv)
 
                 time_end = [strftime('%b-%d-%Y_%H%M', time)]
 
                 name = f'apa_{apa}_afe_{ch//8}_ch_{ch}'
                 f = recreate(name + '.root')
-                f["tree/bias"] = ({'bias_dac': array(bias_dac),'bias_v': array(bias_measured),'current':array(bias_current)})
-                f["tree/iv_trim"] = ({'current': array(current_measured),'trim': array(trim_dac)})
+                f["tree/bias"] = ({'bias_dac': array(bias_dac),'bias_v': array(bias_volt),'current':array(current_bias_scan)})
+                f["tree/iv_trim"] = ({'trim': array(trim_dac),'current': array(current_trim_scan)})
                 f["tree/run"] = ({'time_start':array(time_start),'time_end': array(time_end)})
 
                 channels_afe=list (filter(lambda x: ch//8 == x//8, fbk+hpk))
