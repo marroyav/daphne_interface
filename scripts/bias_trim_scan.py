@@ -81,7 +81,6 @@ def main(map_file,bias_step,bias_start,trim_step,trim_max,current_thr,ip_address
             bias_dac.append(bv)
             bias_volt.append(interface.read_bias()[ch//8])
             current_bias_scan.append(current)
-            print(bias_start,bv,bias_vbd_hot-bias_start,current)
 
             if current > current_thr:
                 for tv in tqdm(range(0, trim_max, trim_step), desc=f"Running trim scan on ch_{ch}..."):

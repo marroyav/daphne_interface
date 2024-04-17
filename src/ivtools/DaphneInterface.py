@@ -86,7 +86,7 @@ class interface(object):
 
     def read_bias(self):
         info=self.command(f'RD VM ALL')
-        b_vector=[float(info.split(f"VBIAS{i}=")[1][:7]) for i in range (5)]
+        b_vector=[float(info.split(f"VBIAS{i}=")[1][:6]) for i in range (5)]
         return b_vector
 
 
