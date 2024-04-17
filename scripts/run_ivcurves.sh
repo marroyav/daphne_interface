@@ -19,9 +19,7 @@ if [ ! "$BASH_VERSION" ] ; then
     exec /bin/bash "$0" "$@"
 fi
 
-#Script must be run from SCRIPTS folder or paths will be messed up
 echo -e "\e[31mWARNING: You are about to acquire iv_curves data for IP(s): ["${your_ips[@]}"] !\e[0m"
-# Ask if sure to continue
 read -p "Are you sure you want to continue? (y/n) " -n 1 -r
 echo
 # If the user did not answer with y, exit the script
