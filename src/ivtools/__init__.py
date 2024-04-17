@@ -1,1 +1,1 @@
-from .DaphneInterface import interface
+from .DaphneInterface import daphne

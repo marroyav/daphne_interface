@@ -8,7 +8,7 @@ import unicodedata
 import socket
 import struct
 
-class interface(object):
+class daphne(object):
 
     def __init__(self,ipaddr,port=2001):
         self.sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -73,12 +73,12 @@ class interface(object):
     def read_current(self, ch=0,iterations=3):
         self.current = None
         counter=0
-        while self.current is None and counter<400:
+        while self.current is None and counter<50:
             try:
-                self.current = [float(self.command(f'RD CM CH {ch}').split("(mV)= -")[1][:9]) for i in range (iterations)]
+                self.current = [float(self.command(f'RD CM CH {ch}').split("(mV)= ")[1][:8]) for i in range (iterations)]
                 counter+=1
             except:
-                if counter>=400:
+                if counter>=50:
                     self.close()
                 else:
                     pass
