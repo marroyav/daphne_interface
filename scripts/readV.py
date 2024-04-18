@@ -2,9 +2,11 @@ import argparse
 import ivtools
 
 def read_bias_on_ip(ip):
-    daphne = ivtools.interface('10.73.137.' + str(100 + int(ip)))
-    k = daphne.read_bias()
-    print(k)
+    daphne = ivtools.daphne('10.73.137.'+ip)
+    print("Bias for endpoint",ip,daphne.read_bias())
+    #k = daphne.read_bias()
+    daphne.close()
+    #print(k)
 
 def main():
     parser = argparse.ArgumentParser(description="Read V for a given set of IPs")
@@ -14,10 +16,10 @@ def main():
 
     if not args.ips:
         print("No IP specified, reading V for all endponts")
-        for ip in [4, 5, 7, 9, 11, 12, 13]:
+        for ip in ['104','105','107','109','111','112','113']:
             read_bias_on_ip(ip)
     else:
-        print("Reading V for endpoint",args.ips)
+        print("Reading V for endpoints",args.ips)
         for ip in args.ips:
             read_bias_on_ip(ip)
 
