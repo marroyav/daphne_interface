@@ -83,7 +83,7 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
             bias_volt.append(interface.read_bias()[ch//8])
             current_bias_scan.append(current)
 
-            if current > current_thr or bv == bias_stop-bias_step:
+            if current > current_thr or bv >= bias_stop-bias_step:
 
                 apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {bv-bias_step}')
 
