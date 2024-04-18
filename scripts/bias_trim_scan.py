@@ -65,7 +65,7 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
         
         time_start = [strftime('%b-%d-%Y_%H%M', localtime())]
 
-        bias_stop = hpk_value[idx] if ch in hpk else fbk_value[idx]
+        bias_stop = hpk_value[idx-len(hpk)] if ch in hpk else fbk_value[idx]
         set_bias=[interface.command(f'WR BIASSET AFE {ch//8} V {bias_start_hpk if ch in hpk else bias_start_fbk}')]
 
         other_channels=list (filter(lambda x :x!=ch and ch//8 == x//8, fbk+hpk))
