@@ -1,0 +1,8 @@
+click
+numpy
+matplotlib
+tqdm
+uproot
+pandas
+scipy
+.
