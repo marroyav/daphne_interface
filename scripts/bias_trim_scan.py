@@ -13,15 +13,16 @@ import json
 
 @click.command()
 @click.option("--map_file", '-map', default="iv_map.json",help="Input file with channel starting bias mapping")
-@click.option("--bias_start_hpk", '-bsh', default=700,help="starting bias DAC counts for HPK")
-@click.option("--bias_start_fbk", '-bsf', default=400,help="starting bias DAC counts for FBK")
+@click.option("--bias_start_hpk", '-bsh', default=850,help="starting bias DAC counts for HPK")
+@click.option("--bias_start_fbk", '-bsf', default=500,help="starting bias DAC counts for FBK")
 @click.option("--bias_step", '-bs', default=10,help="DAC counts per step")
 @click.option("--trim_step", '-ts', default=45,help="trim DAC counts per step")
 @click.option("--trim_max", '-tm', default=3000,help="maximum trim DAC counts")
-@click.option("--current_thr", '-ct', default=0.5,help="maximum allowed current")
+@click.option("--current_thr_hpk", '-cth', default=0.6,help="maximum allowed current for HPK")
+@click.option("--current_thr_fbk", '-ctf', default=0.4,help="maximum allowed current for FBK")
 @click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
 
-def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,current_thr,ip_address):
+def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,current_thr_hpk,current_thr_fbk,ip_address):
     
     with open(map_file, "r") as fp:
         map = json.load(fp)
@@ -83,8 +84,8 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
             bias_volt.append(interface.read_bias()[ch//8])
             current_bias_scan.append(current)
 
-            if current > current_thr or bv >= bias_stop-bias_step:
-
+            if (abs(current) > abs(current_thr_hpk) and ch in hpk) or (abs(current) > abs(current_thr_fbk) and ch in fbk) or bv >= bias_stop-bias_step:
+                
                 for tv in tqdm(range(0, trim_max, trim_step), desc=f"Running trim scan on ch_{ch}..."):
 
                     apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {tv}')
