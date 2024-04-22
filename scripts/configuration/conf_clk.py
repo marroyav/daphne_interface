@@ -5,7 +5,7 @@ from time import sleep
 
 class config(object):
     def __init__(self,ip_address):
-        self.device = ivtools.interface(ip_address)
+        self.device = ivtools.daphne(ip_address)
         print("DAPHNE firmware version %0X" % self.device.read_reg(0x9000,1)[2])
         USE_ENDPOINT = 1
         EDGE_SELECT = 0
@@ -35,8 +35,7 @@ def main():
     if args.ip:
         c=config(args.ip)
     else:
-        #for i in [12]:
-        for i in [13]:
+        for i in [4,5,7,9,11,12,13]:
             c=config(f"10.73.137.{100+i}")
 
 
