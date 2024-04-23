@@ -33,12 +33,16 @@ def main(map_location,ip_address,test):
     hpk_op_trim = map['hpk_op_trim']
     
     #print(fbk,hpk,fbk_op_bias,hpk_op_bias,fbk_op_trim,hpk_op_trim)
-
+    
     interface=ivtools.daphne(ip_address)
-    disable_bias=interface.command(f'WR VBIASCTRL V {0}')
-    set_bias=[interface.command(f'WR BIASSET AFE {i} V {0}') for i in range (5)]
-    apply_trim=[interface.command(f'WR TRIM CH {i} V {0}')for i in range (40)]
-    enable_bias=interface.command(f'WR VBIASCTRL V {4000}')
+
+    if test:
+       print("You are running in test mode, values will be printed but not set")
+    else:  
+        disable_bias=interface.command(f'WR VBIASCTRL V {0}')
+        set_bias=[interface.command(f'WR BIASSET AFE {i} V {0}') for i in range (5)]
+        apply_trim=[interface.command(f'WR TRIM CH {i} V {0}')for i in range (40)]
+        enable_bias=interface.command(f'WR VBIASCTRL V {4000}')
 
     for idx, ch in enumerate(fbk + hpk):
 
