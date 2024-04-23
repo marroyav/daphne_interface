@@ -12,7 +12,7 @@ from numpy import array
 import json
 
 @click.command()
-@click.option("--map_file", '-map', default="iv_map.json",help="Input file with channel starting bias mapping")
+@click.option("--map_file", '-map', default="./../maps/iv_map.json",help="Input file with channel starting bias mapping")
 @click.option("--bias_start_hpk", '-bsh', default=850,help="starting bias DAC counts for HPK")
 @click.option("--bias_start_fbk", '-bsf', default=500,help="starting bias DAC counts for FBK")
 @click.option("--bias_step", '-bs', default=10,help="DAC counts per step")
