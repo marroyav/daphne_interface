@@ -12,7 +12,6 @@ class config(object):
         TIMING_GROUP = 0
         ENDPOINT_ADDRESS = 0
         self.device.write_reg(0x4001, [USE_ENDPOINT])
-        self.device.write_reg(0x3000, [0x002081+(0x400000*int(ip_address[-1]))])
         self.device.write_reg(0x3001, [0b11111111])
         self.device.write_reg(0x4003, [1234])
         sleep(0.5)
