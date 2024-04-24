@@ -1,14 +1,16 @@
 import ivtools
 
-full_stream_ep=[13]
-hi_rate_self_triggr_ep=[]
+full_stream_ep=[4,5,7]
+hi_rate_self_triggr_ep=[9,11,12,13]
 low_rate_self_triggr_ep=[]
-disable=[4,5,7,9,11,12]
+disable=[]
+dict_0x3000 = {"104":0x001081,"105":0x001081,"107":0x001081,"109":0x001081,
+               "111":0x002081,"112":0x002081,"113":0x002081}
 
 for i in full_stream_ep:
-    thing = ivtools.interface(f"10.73.137.{100+i}")
+    thing = ivtools.daphne(f"10.73.137.{100+i}")
     print (f"address= 10.73.137.{100+i}")
-    thing.write_reg(0x3000,[0x002081+i*0x400000])
+    thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0xaa])
     print(f"data mode = {hex(thing.read_reg(0x3001,1)[2])}")
@@ -19,9 +21,9 @@ for i in full_stream_ep:
     thing.close()
 
 for i in hi_rate_self_triggr_ep:
-    thing = ivtools.interface(f"10.73.137.{100+i}")
+    thing = ivtools.daphne(f"10.73.137.{100+i}")
     print (f"address= 10.73.137.{100+i}")
-    thing.write_reg(0x3000,[0x002081+i*0x400000])
+    thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0x3])
     print(f"data mode = {hex(thing.read_reg(0x3001,1)[2])}")
@@ -32,9 +34,9 @@ for i in hi_rate_self_triggr_ep:
     #print(f"reg 0x5007 = {(thing.read_reg(0x5007,2))}")
 
 for i in low_rate_self_triggr_ep:
-    thing = ivtools.interface(f"10.73.137.{100+i}")
+    thing = ivtools.daphne(f"10.73.137.{100+i}")
     print (f"address= 10.73.137.{100+i}")
-    thing.write_reg(0x3000,[0x002081+i*0x400000])
+    thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0x3])
     print(f"data mode = {hex(thing.read_reg(0x3001,1)[2])}")
@@ -45,9 +47,9 @@ for i in low_rate_self_triggr_ep:
 
 
 for i in disable:
-    thing = ivtools.interface(f"10.73.137.{100+i}")
+    thing = ivtools.daphne(f"10.73.137.{100+i}")
     print (f"address= 10.73.137.{100+i}")
-    thing.write_reg(0x3000,[0x002081+i*0x400000])
+    thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0x0])
     print(f"data mode = {hex(thing.read_reg(0x3001,1)[2])}")
