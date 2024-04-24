@@ -1,22 +1,50 @@
-import ivtools
+import ivtools, click
 
-print ("DAPHNE physical scheme")
-print ("ADDRESS    ",end='\t')
-print ("SLOT",end='\t')
-print ("REG",end='\t')
-print ("MODE",)
-
-for i in [4,5,7,9,11,12,13]:
-    thing = ivtools.daphne(f"10.73.137.{100+i}")
-    print(f"10.73.137.{100+i}",end='\t')
-    slot = (thing.read_reg(0x3000,1)[2]>>22)
-    sender = (thing.read_reg(0x3001,1)[2])
+@click.command()
+@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
+def main(ip_address):
+    '''
+    This script checks the datamode for each endpoint configured with conf_datamodes.py.
+    The expected output is:
+        DAPHNE physical scheme
+        ADDRESS         SLOT    REG     MODE
+        10.73.137.104   4       0xaa    full streaming
+        10.73.137.105   5       0xaa    full streaming
+        10.73.137.107   7       0xaa    full streaming
+        10.73.137.109   9       0x3     self trigger
+        10.73.137.111   11      0x3     self trigger
+        10.73.137.112   12      0x3     self trigger
+        10.73.137.113   13      0x3     self trigger
+        
+    Args: 
+        - ip_address (default='ALL'): if no argument given it runs over all endpoints.
     
-    print(f"{slot}",end='\t')
-    print(f"{hex(sender)}",end='\t')
+    Example: python conf_analog.py (-ip 4,5)
+    '''
+    print ("DAPHNE physical scheme")
+    print ("ADDRESS", end='\t')
+    print ("SLOT", end='\t')
+    print ("REG", end='\t')
+    print ("MODE")
 
-    if sender==0xaa:  print(f"full streaming")
-    elif sender==0x3: print(f"self trigger")
-    else:             print("disabled")
-    
-    thing.close()
+    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
+    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
+
+    for ip in your_ips:
+        interface = ivtools.daphne(f"10.73.137.{100+ip}")
+        print(f"10.73.137.{100+ip}",end='\t')
+        slot = (interface.read_reg(0x3000,1)[2]>>22)
+        sender = (interface.read_reg(0x3001,1)[2])
+        
+        print(f"{slot}",end='\t')
+        print(f"{hex(sender)}",end='\t')
+
+        if   sender==0xaa: print(f"full streaming")
+        elif sender==0x3:  print(f"self trigger")
+        else:              print("disabled")
+        
+        interface.close()
+
+
+if __name__ == "__main__":
+    main()

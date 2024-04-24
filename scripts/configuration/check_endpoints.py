@@ -1,20 +1,34 @@
-import ivtools
-import argparse
+import ivtools, click
 
-class config(object):
-    def __init__(self,ip_address):
+@click.command()
+@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
+def main(ip_address):
+    '''
+    Verify the clocks and timing endpoint is in a good state (registers 0x4000, 0x4002, 0x4003)
+    This script checks the status of the yellow fiber connecting to the timing interface.
+    We expect a "Good to go!" message, if not we should run: source setup_timing.sh (from np04daq@np04-srv-024 daphne/config/ folder)
+    
+    Args: 
+        - ip_address (default='ALL'): if no argument given it runs over all endpoints.
+    
+    Example: python conf_analog.py (-ip 4,5)
+    '''
 
-        thing = ivtools.daphne(ip_address)
+    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
+    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
+    for ip in your_ips:
+        ip = f"10.73.137.{100+ip}"
+        interface = ivtools.daphne(ip)
         print(f"--------------------------------------")
         print(f"--------------------------------------")
-        print(f"DAPHNE ip address {ip_address}")
-        print("DAPHNE firmware version %0X" % thing.read_reg(0x9000,1)[2])
-        print("test resgisters %0X" % thing.read_reg(0xaa55,1)[2])
-        print("endpoint address %0X" % thing.read_reg(0x4001,1)[2])
-        print("register 5001 %0X" % thing.read_reg(0x5001,1)[2])
-        print("register 3000 %0X" % thing.read_reg(0x3000,1)[2])
+        print(f"DAPHNE ip address {ip}")
+        print("DAPHNE firmware version %0X" % interface.read_reg(0x9000,1)[2])
+        print("test resgisters %0X" % interface.read_reg(0xaa55,1)[2])
+        print("endpoint address %0X" % interface.read_reg(0x4001,1)[2])
+        print("register 5001 %0X" % interface.read_reg(0x5001,1)[2])
+        print("register 3000 %0X" % interface.read_reg(0x3000,1)[2])
 
-        epstat = thing.read_reg(0x4000,1)[2] # read_reg the timing endpoint and master cl    ock status register
+        epstat = interface.read_reg(0x4000,1)[2] # read_reg the timing endpoint and master cl    ock status register
 
         if (epstat & 0x00000001):
                 print("MMCM0 is LOCKED OK")
@@ -79,20 +93,8 @@ class config(object):
         else:
                 print("Endpoint State = %d : warning! undefined state!" %ep_state)
 
-        thing.close()
-
-def main():
-    parser = argparse.ArgumentParser(description="Endpoint Status of DAPHNE")
-    parser.add_argument('--ip', type=str, required=False, help='IP address.')
-    args=parser.parse_args()
-    if args.ip:
-        c=config(args.ip)
-    else:
-        for i in [4,5,7,9,11,12,13]:
-            c=config(f"10.73.137.{100+i}")
-
+        interface.close()
 
 
 if __name__ == "__main__":
     main()
-                       
