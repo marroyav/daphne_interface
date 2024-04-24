@@ -1,6 +1,4 @@
 import ivtools
-import multiprocessing
-from time import sleep
 from tqdm import tqdm
 
 def configure(ep):
