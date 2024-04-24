@@ -6,7 +6,7 @@ def configure(ep):
     print(f'Configuring Offset in 40 ch DAPHNE {ep} ')
     interface.command( f'CFG AFE ALL INITIAL')
     for ch in tqdm(range(40),unit='Channels'):
-        interface.command('WR OFFSET CH ' + str(int(ch)) + ' V 1468')
+        interface.command('WR OFFSET CH '  + str(int(ch)) + ' V 1468')
         interface.command('CFG OFFSET CH ' + str(int(ch)) + ' GAIN 2')
 
     print(f'Configuring AFE registers 4, 51, 52 and Attenuators')

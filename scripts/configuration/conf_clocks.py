@@ -6,20 +6,19 @@ from time import sleep
 class config(object):
     def __init__(self,ip_address):
         self.device = ivtools.daphne(ip_address)
-        print("DAPHNE firmware version %0X" % self.device.read_reg(0x9000,1)[2])
+        print("DAPHNE firmware version %0X" %self.device.read_reg(0x9000,1)[2])
         USE_ENDPOINT = 1
         EDGE_SELECT = 0
         TIMING_GROUP = 0
         ENDPOINT_ADDRESS = 0
-        self.device.write_reg(0x4001, [USE_ENDPOINT])
-        self.device.write_reg(0x3001, [0b11111111])
-        self.device.write_reg(0x4003, [1234])
+        self.device.write_reg(0x4001, [USE_ENDPOINT]) #Master Clock and Timing Endpoint Control Register (read write)
+        self.device.write_reg(0x4003, [1234])         #0x00004003  Write anything to reset timing endpoint
         sleep(0.5)
-        self.device.write_reg(0x4002, [1234])
+        self.device.write_reg(0x4002, [1234])         #0x00004002  Write anything to reset master clock MMCM1
         sleep(0.5)
-        self.device.write_reg(0x2001, [1234])
+        self.device.write_reg(0x2001, [1234])          
         sleep(0.5)
-        print("AFE automatic alignment done, should read 0x1F: %0X" % self.device.read_reg(0x2002,1)[2])
+        print("AFE automatic alignment done, should read 0x1F: %0X" %self.device.read_reg(0x2002,1)[2])
         print("AFE0 Error Count = %0X" % self.device.read_reg(0x2010,1)[2])
         print("AFE1 Error Count = %0X" % self.device.read_reg(0x2011,1)[2])
         print("AFE2 Error Count = %0X" % self.device.read_reg(0x2012,1)[2])

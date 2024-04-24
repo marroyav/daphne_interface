@@ -4,12 +4,12 @@ full_stream_ep=[4,5,7]
 hi_rate_self_triggr_ep=[9,11,12,13]
 low_rate_self_triggr_ep=[]
 disable=[]
-dict_0x3000 = {"104":0x001081,"105":0x001081,"107":0x001081,"109":0x001081,
-               "111":0x002081,"112":0x002081,"113":0x002081}
+dict_0x3000 = {"4":0x001081,"5":0x001081,"7":0x001081,"9":0x001081,
+               "11":0x002081,"12":0x002081,"13":0x002081}
 
 for i in full_stream_ep:
     thing = ivtools.daphne(f"10.73.137.{100+i}")
-    print (f"address= 10.73.137.{100+i}")
+    print(f"address= 10.73.137.{100+i}")
     thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0xaa])
@@ -22,7 +22,7 @@ for i in full_stream_ep:
 
 for i in hi_rate_self_triggr_ep:
     thing = ivtools.daphne(f"10.73.137.{100+i}")
-    print (f"address= 10.73.137.{100+i}")
+    print(f"address= 10.73.137.{100+i}")
     thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0x3])
@@ -35,7 +35,7 @@ for i in hi_rate_self_triggr_ep:
 
 for i in low_rate_self_triggr_ep:
     thing = ivtools.daphne(f"10.73.137.{100+i}")
-    print (f"address= 10.73.137.{100+i}")
+    print(f"address= 10.73.137.{100+i}")
     thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0x3])
@@ -48,7 +48,7 @@ for i in low_rate_self_triggr_ep:
 
 for i in disable:
     thing = ivtools.daphne(f"10.73.137.{100+i}")
-    print (f"address= 10.73.137.{100+i}")
+    print(f"address= 10.73.137.{100+i}")
     thing.write_reg(0x3000,[dict_0x3000[str(i)]+i*0x400000])
     print(f"parameters =  {hex(thing.read_reg(0x3000,1)[2])}")
     thing.write_reg(0x3001,[0x0])

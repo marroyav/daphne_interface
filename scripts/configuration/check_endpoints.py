@@ -8,13 +8,13 @@ class config(object):
         print(f"--------------------------------------")
         print(f"--------------------------------------")
         print(f"DAPHNE ip address {ip_address}")
-        print("DAPHNE firmware version %0X" % thing.read(0x9000,1)[2])
-        print("test resgisters %0X" % thing.read(0xaa55,1)[2])
-        print("endpoint address %0X" % thing.read(0x4001,1)[2])
-        print("register 5001 %0X" % thing.read(0x5001,1)[2])
-        print("register 3000 %0X" % thing.read(0x3000,1)[2])
+        print("DAPHNE firmware version %0X" % thing.read_reg(0x9000,1)[2])
+        print("test resgisters %0X" % thing.read_reg(0xaa55,1)[2])
+        print("endpoint address %0X" % thing.read_reg(0x4001,1)[2])
+        print("register 5001 %0X" % thing.read_reg(0x5001,1)[2])
+        print("register 3000 %0X" % thing.read_reg(0x3000,1)[2])
 
-        epstat = thing.read(0x4000,1)[2] # read the timing endpoint and master cl    ock status register
+        epstat = thing.read_reg(0x4000,1)[2] # read_reg the timing endpoint and master cl    ock status register
 
         if (epstat & 0x00000001):
                 print("MMCM0 is LOCKED OK")
