@@ -16,6 +16,10 @@ def main(ip_address):
     if ip_address=="ALL": your_ips = [4,5,7] #Only full-streaming endpoints
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
     for ip in your_ips: 
+        if ip not in [4,5,7,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            exit()
+            
         if ip in [9,11,12,13]: 
             warnings.warn(f'EndPoint {ip} not full-streaming (expecting 4,5 or 7), continuing with the next one...')
             continue

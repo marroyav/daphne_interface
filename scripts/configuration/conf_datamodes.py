@@ -29,6 +29,9 @@ def main(ip_address):
                  }
     
     for ip in your_ips: 
+        if ip not in [4,5,7,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            exit()
         interface = ivtools.daphne(f"10.73.137.{100+ip}")
         print(f"address= 10.73.137.{100+ip}")
         trigger = data_mode[ip][0]
@@ -50,7 +53,7 @@ def main(ip_address):
             print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
             interface.write_reg(0x3001,[0x3])
             print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6000,[16000])
+            interface.write_reg(0x6000,[600])
             print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
             interface.write_reg(0x6001,[0xfffffffff])
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")

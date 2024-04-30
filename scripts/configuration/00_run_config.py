@@ -25,6 +25,12 @@ def run_config(ip_address):
     confirmation = input(f"Are you sure you want to continue with IP(s): [{ip_address}]? (y/n): ")
     if confirmation.lower() not in ['true', '1', 't', 'y', 'yes']: exit()
 
+    # Safety check to make sure that the IP address is valid
+    for ip in list(map(int, list(ip_address.split(",")))):
+        if ip not in [4,5,7,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            exit()
+
     # List of scripts to run
     config_scripts = ["conf_clocks.py", 
                       "conf_analog.py", 

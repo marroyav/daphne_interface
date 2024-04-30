@@ -18,6 +18,9 @@ def main(ip_address):
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
     
     for ip in your_ips:
+        if ip not in [4,5,7,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            exit()
         interface = ivtools.daphne(f"10.73.137.{ip+100}")
         interface.write_reg(0x2000, [1234])
         print (f"time stamp in DAPHNE with ip address 10.73.137.{100+ip}"  )
