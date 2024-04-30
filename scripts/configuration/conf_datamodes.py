@@ -53,7 +53,8 @@ def main(ip_address):
             print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
             interface.write_reg(0x3001,[0x3])
             print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6000,[600])
+            # interface.write_reg(0x6000,[600]) # Cosmic threshold [ADC counts]
+            interface.write_reg(0x6000,[9000])  # Calibration threshold [ADC counts]
             print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
             interface.write_reg(0x6001,[0xfffffffff])
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
