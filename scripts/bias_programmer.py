@@ -4,7 +4,7 @@ import ivtools, click
 @click.option("--ip_address", '-ip', default='10.73.137.113',help="IP Address")
 def main(ip_address):
     interface = ivtools.daphne(ip_address)
-    trim = [900,0,1340,0,0,840,0,1110]
+    # trim = [900,0,1340,0,0,840,0,1110]
     
     # Breakdown values
     v_bd = {   
@@ -29,7 +29,7 @@ def main(ip_address):
 
     disable_bias = interface.command( f'WR VBIASCTRL V {0}')
     set_bias = [interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (1)]
-    apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
+    # apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
     enable_bias = interface.command( f'WR VBIASCTRL V {4095}')
     for v in v_op[ip_address]:
         interface.command( f'WR BIASSET AFE {v_op[ip_address].index(v)} V {v}')
