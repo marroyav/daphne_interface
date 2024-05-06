@@ -31,7 +31,7 @@ def main(ip_address):
         for AFE in tqdm(range(5),unit='AFE'):
             interface.command('WR AFE '+ str(int(AFE)) + ' REG 52 V 16896')
             interface.command('WR AFE '+ str(int(AFE)) + ' REG 4 V 24')
-            interface.command('WR AFE '+ str(int(AFE)) + ' REG 51 V 8')
+            interface.command('WR AFE '+ str(int(AFE)) + ' REG 51 V 0')
             interface.command('WR AFE '+ str(int(AFE)) + ' VGAIN V 2318')
             alignment=[interface.write_reg(0x2001,[1234]) for _ in range (3)]
         print('Finished writing commands.')
