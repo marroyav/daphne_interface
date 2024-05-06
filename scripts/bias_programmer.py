@@ -31,8 +31,8 @@ def main(ip_address):
     set_bias = [interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (1)]
     # apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
     enable_bias = interface.command( f'WR VBIASCTRL V {4095}')
-    for v in v_op[ip_address]:
-        interface.command( f'WR BIASSET AFE {v_op[ip_address].index(v)} V {v}')
+    for vdx,v_value in enumerate(v_op[ip_address]):
+        interface.command( f'WR BIASSET AFE {vdx} V {v_value}')
     print(interface.read_bias())
 
 
