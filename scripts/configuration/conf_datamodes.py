@@ -28,6 +28,9 @@ def main(ip_address):
                  13:["hi_rate_self_trigger", 0x002081]  #
                  }
     
+    threshold = input(f"For this script you need to specify your threshold [CALIB: 9000, COMIC: 600]:  ")
+    threshold = int(threshold)
+
     for ip in your_ips: 
         if ip not in [4,5,7,9,11,12,13]: 
             print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
@@ -53,8 +56,7 @@ def main(ip_address):
             print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
             interface.write_reg(0x3001,[0x3])
             print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            # interface.write_reg(0x6000,[600]) # Cosmic threshold [ADC counts]
-            interface.write_reg(0x6000,[9000])  # Calibration threshold [ADC counts]
+            interface.write_reg(0x6000,[threshold])  # Setting threshold [ADC counts]
             print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
             interface.write_reg(0x6001,[0xfffffffff])
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
