@@ -1,11 +1,8 @@
 import ivtools, click
 
 @click.command()
-@click.option("--ip_address", '-ip', default='10.73.137.113',help="IP Address")
+@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
 def main(ip_address):
-    interface = ivtools.daphne(ip_address)
-    # trim = [900,0,1340,0,0,840,0,1110]
-    
     # Breakdown values
     v_bd = {   
             '10.73.137.104':[675,1000],
@@ -26,14 +23,25 @@ def main(ip_address):
             '10.73.137.112':[1158,1078,1138,1138,1158],
             '10.73.137.113':[805]
           }
+    
+    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
+    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
 
-    disable_bias = interface.command( f'WR VBIASCTRL V {0}')
-    set_bias = [interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (1)]
-    # apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
-    enable_bias = interface.command( f'WR VBIASCTRL V {4095}')
-    for vdx,v_value in enumerate(v_op[ip_address]):
-        interface.command( f'WR BIASSET AFE {vdx} V {v_value}')
-    print(interface.read_bias())
+    for ip in your_ips:
+        if ip not in [4,5,7,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            exit()
+        ip=f"10.73.137.{100+ip}"
+        interface = ivtools.daphne(ip)
+        # trim = [900,0,1340,0,0,840,0,1110]
+
+        disable_bias = interface.command( f'WR VBIASCTRL V {0}')
+        set_bias = [interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (1)]
+        # apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
+        enable_bias = interface.command( f'WR VBIASCTRL V {4095}')
+        for vdx,v_value in enumerate(v_op[ip]):
+            interface.command( f'WR BIASSET AFE {vdx} V {v_value}')
+        print(interface.read_bias())
 
 
 if __name__ == "__main__":
