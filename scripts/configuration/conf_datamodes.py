@@ -58,7 +58,9 @@ def main(ip_address):
             print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
             interface.write_reg(0x6000,[threshold])  # Setting threshold [ADC counts]
             print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
-            interface.write_reg(0x6001,[0xfffffffff])
+            interface.write_reg(0x6001,[0xffffffffff])
+            #Avoid matching-trigger
+            if ip==11: print(f"Special endpoint {ip}"); interface.write_reg(0x6100,[0x3FB03FFFFFF]) 
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
         
         if trigger == "low_rate_self_trigger":
