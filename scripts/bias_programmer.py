@@ -2,7 +2,9 @@ import ivtools, click
 
 @click.command()
 @click.option("--ip_address", '-ip', default='ALL',help="IP Address")
-def main(ip_address):
+@click.option("--mode", '-m', default='OP',help="Bias Mode")
+
+def main(mode,ip_address):
     # Breakdown values
     v_bd = {   
             '10.73.137.104':[675,1000],
@@ -23,6 +25,15 @@ def main(ip_address):
             '10.73.137.112':[1158,1078,1138,1138,1158],
             '10.73.137.113':[805]
           }
+    v_noise_test = {
+            '10.73.137.104':[650,970],
+            '10.73.137.105':[660,650,1050],
+            '10.73.137.107':[660,990],
+            '10.73.137.109':[650,680,1070,1040,1000],
+            '10.73.137.111':[660,670,650,1050,1050],
+            '10.73.137.112':[1050,970,1030,1030,1050],
+            '10.73.137.113':[660]
+    }
     
     if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
@@ -39,7 +50,12 @@ def main(ip_address):
         set_bias = [interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (1)]
         # apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
         enable_bias = interface.command( f'WR VBIASCTRL V {4095}')
-        for vdx,v_value in enumerate(v_op[ip]):
+        v_used = {}
+        if mode is 'OP': v_used = v_op
+        elif mode is 'BD': v_used = v_bd
+        elif mode is 'NOISE': v_used = v_noise_test
+        else: print("ERROR: no Valid operation mode"); break
+        for vdx,v_value in enumerate(v_used[ip]):
             interface.command( f'WR BIASSET AFE {vdx} V {v_value}')
         print(interface.read_bias())
 
