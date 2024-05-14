@@ -1,4 +1,4 @@
-import argparse, ivtools, click
+import ivtools, click
 
 @click.command()
 @click.option("--ip_address", '-ip', default='ALL',help="IP Address")

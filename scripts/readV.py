@@ -1,27 +1,19 @@
-import argparse
-import ivtools
+import ivtools, click
 
-def read_bias_on_ip(ip):
-    daphne = ivtools.daphne('10.73.137.'+ip)
-    print("Bias for endpoint",ip,daphne.read_bias())
-    #k = daphne.read_bias()
-    daphne.close()
-    #print(k)
+@click.command()
+@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
+def main(ip_address):
+    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
+    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
 
-def main():
-    parser = argparse.ArgumentParser(description="Read V for a given set of IPs")
-    parser.add_argument('ips', nargs='*', help="List of IPs to apply commands (default: all IPs)")
+    for ip in your_ips:
+        if ip not in [4,5,7,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            exit()
 
-    args = parser.parse_args()
-
-    if not args.ips:
-        print("No IP specified, reading V for all endponts")
-        for ip in ['104','105','107','109','111','112','113']:
-            read_bias_on_ip(ip)
-    else:
-        print("Reading V for endpoints",args.ips)
-        for ip in args.ips:
-            read_bias_on_ip(ip)
+        daphne = ivtools.daphne(f"10.73.137.{100+ip}")
+        print("Bias for endpoint",ip,daphne.read_bias())
+        daphne.close()
 
 if __name__ == "__main__":
     main()
