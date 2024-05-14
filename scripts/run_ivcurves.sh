@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo -e "\e[36m[INFO] Welcome to the script for acquiring IV curves!"
+echo -e "\e[36m[INFO] Welcome to the script for acquiring IV curves! [Make sure you have no bias]"
 echo -e "\e[36m To execute the script just run: sh run_ivcurves.sh and all the IPs will be acquired in individual tmux sessions."
 echo -e " For running over personalized IP(s) run: sh run_ivcurves.sh \"104 105\""
 echo -e " Enjoy! :) \n \e[0m"

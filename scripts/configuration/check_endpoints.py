@@ -14,6 +14,8 @@ def main(ip_address):
     Example: python conf_analog.py (-ip 4,5)
     '''
 
+    print(f"\033[35mExpecting: The same firmware version and a Good to go!!! message for all endpoints\033[0m")
+
     if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
     for ip in your_ips:
@@ -22,7 +24,7 @@ def main(ip_address):
             exit()
         ip = f"10.73.137.{100+ip}"
         interface = ivtools.daphne(ip)
-        print(f"--------------------------------------")
+        print(f"\n--------------------------------------")
         print(f"--------------------------------------")
         print(f"DAPHNE ip address {ip}")
         print("DAPHNE firmware version %0X" % interface.read_reg(0x9000,1)[2])
