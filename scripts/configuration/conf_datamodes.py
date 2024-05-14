@@ -23,12 +23,13 @@ def main(ip_address):
                  5: ["full_stream", 0x001081],          #
                  7: ["full_stream", 0x001081],          #
                  9: ["hi_rate_self_trigger", 0x001081], #
-                 11:["hi_rate_self_trigger", 0x002081], #
-                 12:["hi_rate_self_trigger", 0x002081], #
-                 13:["hi_rate_self_trigger", 0x002081]  #
+                 11:["hi_rate_self_trigger", 0x002081,0xffffffffff], #
+                 12:["hi_rate_self_trigger", 0x002081,0x25ffffffff], #
+                 13:["hi_rate_self_trigger", 0x002081,0xa5]  #
                  }
+    print(f"\033[35mExpecting: The same parameters output (Crate number) for all endpoints\033[0m")
     
-    threshold = input(f"For this script you need to specify your threshold [CALIB: 9000, COMIC: 600]:  ")
+    threshold = input(f"\nFor this script you need to specify your threshold [CALIB: 9000, COMIC: 600]:  ")
     threshold = int(threshold)
 
     for ip in your_ips: 
@@ -36,9 +37,10 @@ def main(ip_address):
             print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
             exit()
         interface = ivtools.daphne(f"10.73.137.{100+ip}")
-        print(f"address= 10.73.137.{100+ip}")
-        trigger = data_mode[ip][0]
-        d0x3000 = data_mode[ip][1]
+        print(f"\nConfiguring endpoint 10.73.137.{100+ip}")
+        trigger = data_mode[ip][0] # trigger mode
+        d0x3000 = data_mode[ip][1] #
+        d0x6001 = data_mode[ip][2] #40 channels register that configures what channels are being saved
 
         if trigger == "full_stream":
             interface.write_reg(0x3000,[d0x3000+ip*0x400000])
@@ -56,11 +58,27 @@ def main(ip_address):
             print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
             interface.write_reg(0x3001,[0x3])
             print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6000,[threshold])  # Setting threshold [ADC counts]
+            interface.write_reg(0x6000,[threshold])  # Setting threshold [ADC counts] with user input
             print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
-            interface.write_reg(0x6001,[0xffffffffff])
-            #Avoid matching-trigger
-            if ip==11: print(f"Special endpoint {ip}"); interface.write_reg(0x6100,[0x3FB03FFFFFF]) 
+            interface.write_reg(0x6001,[d0x6001]) # Setting channels to make trigger with map information
+            #Avoid matching-trigger #commenting this line will enable matching trigger
+            if ip==11: 
+                ## Daniel Avila self-trigger
+                print(f"[daniel] Special endpoint {ip}")
+                interface.write_reg(0x6001,[0x0000A50000])
+                interface.write_reg(0x6100,[0x3FCE0000190]) 
+            ## disenable :0x3FB03FFFFFF
+            ## ~50 ADC counts threshold: 0x3FCE000012C
+            ## >60 ADC counts threshold: 0x3FCE0000190
+            if ip==12:
+                print(f"[nacho] Special endpoint {ip}")
+                interface.write_reg(0x6001,[0xA500000000])
+                interface.write_reg(0x7001,[0x3D55])   # Threshold=-4, slope with 3 samples
+                # interface.write_reg(0x7001,[0x3DD5]) # Threshold=-5, slope with 3 samples
+                # interface.write_reg(0x7001,[0x3E15]) # Threshold=-4, slope with 2 samples
+            if ip==13:
+                interface.write_reg(0x6001,[0x0000000A5])
+
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
         
         if trigger == "low_rate_self_trigger":
