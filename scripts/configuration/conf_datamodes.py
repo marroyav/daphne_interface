@@ -62,22 +62,24 @@ def main(ip_address):
             print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
             interface.write_reg(0x6001,[d0x6001]) # Setting channels to make trigger with map information
             #Avoid matching-trigger #commenting this line will enable matching trigger
-            if ip==11: 
-                ## Daniel Avila self-trigger
-                print(f"[daniel] Special endpoint {ip}")
-                interface.write_reg(0x6001,[0x0000A50000])
-                interface.write_reg(0x6100,[0x3FCE0000190]) 
+            # if ip==11: 
+            #     ## Daniel Avila self-trigger
+            #     print(f"[daniel] Special endpoint {ip}")
+            #     interface.write_reg(0x6001,[0x0000A50000])
+                # interface.write_reg(0x6100,[0x3FCE0000190]) 
             ## disenable :0x3FB03FFFFFF
             ## ~50 ADC counts threshold: 0x3FCE000012C
             ## >60 ADC counts threshold: 0x3FCE0000190
-            if ip==12:
-                print(f"[nacho] Special endpoint {ip}")
-                interface.write_reg(0x6001,[0xA500000000])
-                interface.write_reg(0x7001,[0x3D55])   # Threshold=-4, slope with 3 samples
-                # interface.write_reg(0x7001,[0x3DD5]) # Threshold=-5, slope with 3 samples
-                # interface.write_reg(0x7001,[0x3E15]) # Threshold=-4, slope with 2 samples
-            if ip==13:
-                interface.write_reg(0x6001,[0x0000000A5])
+            # if ip==12:
+            #     print(f"[daniel] Special endpoint {ip}")
+            #     # print(f"[nacho] Special endpoint {ip}")
+            #     interface.write_reg(0x6001,[0xA500000000])
+            #     interface.write_reg(0x6100,[0x3FCE0000190])
+            #     # interface.write_reg(0x7001,[0x3E55])   # Threshold=-4, slope with 3 samples
+            #     # interface.write_reg(0x7001,[0x3DD5]) # Threshold=-5, slope with 3 samples
+            #     # interface.write_reg(0x7001,[0x3E15]) # Threshold=-4, slope with 2 samples
+            # if ip==13:
+            #     interface.write_reg(0x6001,[0x0000000A5])
 
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
         
