@@ -24,7 +24,7 @@ def main(ip_address):
                  7: ["full_stream", 0x001081],          #
                  9: ["hi_rate_self_trigger", 0x001081], #
                  11:["hi_rate_self_trigger", 0x002081,0xffffffffff], #
-                 12:["hi_rate_self_trigger", 0x002081,0x25ffffffff], #
+                 12:["hi_rate_self_trigger", 0x002081,0xa5ffffffff], #
                  13:["hi_rate_self_trigger", 0x002081,0xa5]  #
                  }
     print(f"\033[35mExpecting: The same parameters output (Crate number) for all endpoints\033[0m")
