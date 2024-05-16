@@ -35,8 +35,8 @@ def main(mode,ip_address):
             '10.73.137.113':[660]
     }
     
-    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
-    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
+    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]; print("No IP specified, reading all endpoints")
+    else: your_ips = list(map(int, list(ip_address.split(","))))
 
     for ip in your_ips:
         if ip not in [4,5,7,9,11,12,13]: 
@@ -50,14 +50,14 @@ def main(mode,ip_address):
         set_bias = [interface.command( f'WR BIASSET AFE {i} V {0}') for i in range (1)]
         # apply_trim = [interface.command( f'WR TRIM CH {i} V {trim[i]}')for i in range(len(trim))]
         enable_bias = interface.command( f'WR VBIASCTRL V {4095}')
-        v_used = {}
-        if mode is 'OP': v_used = v_op
-        elif mode is 'BD': v_used = v_bd
-        elif mode is 'NOISE': v_used = v_noise_test
+        if   mode == 'OP':    v_used = v_op
+        elif mode == 'BD':    v_used = v_bd
+        elif mode == 'NOISE': v_used = v_noise_test
         else: print("ERROR: no Valid operation mode"); break
+
         for vdx,v_value in enumerate(v_used[ip]):
             interface.command( f'WR BIASSET AFE {vdx} V {v_value}')
-        print(interface.read_bias())
+        print("Bias for endpoint",ip,interface.read_bias())
 
 
 if __name__ == "__main__":
