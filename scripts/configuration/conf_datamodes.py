@@ -19,13 +19,14 @@ def main(ip_address):
     if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
 
-    data_mode = {4: ["full_stream", 0x001081],          # 
-                 5: ["full_stream", 0x001081],          #
-                 7: ["full_stream", 0x001081],          #
-                 9: ["hi_rate_self_trigger", 0x001081], #
-                 11:["hi_rate_self_trigger", 0x002081,0xffffffffff], #
-                 12:["hi_rate_self_trigger", 0x002081,0xa5ffffffff], #
-                 13:["hi_rate_self_trigger", 0x002081,0xa5]  #
+    data_mode = {4: ["full_stream", 0x001081,0xffff],                  # ALL CHANNELS
+                 5: ["full_stream", 0x001081,0x5a0a5ff],               # ALL CHANNELS
+                 7: ["full_stream", 0x001081,0xa9a5],                  # ALL CHANNELS
+                 9: ["hi_rate_self_trigger", 0x001081,0xffffffffff],   # ALL CHANNELS
+                #  9: ["hi_rate_self_trigger", 0x001081,0xa5ffffffff], # CH: 1,3,5,7 disabled
+                 11:["hi_rate_self_trigger", 0x002081,0xffffffffff],   # ALL CHANNELS
+                 12:["hi_rate_self_trigger", 0x002081,0xa5ffffffff],   # CH: ?
+                 13:["hi_rate_self_trigger", 0x002081,0xa5]            # CH: 0,2,5,7 (all for this endpoint)
                  }
     print(f"\033[35mExpecting: The same parameters output (Crate number) for all endpoints\033[0m")
     
@@ -47,7 +48,7 @@ def main(ip_address):
             print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
             interface.write_reg(0x3001,[0xaa])
             print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6001,[0b00000000])
+            interface.write_reg(0x6001,[d0x6001])
             print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
             print(f"reg 0x5007 = {(interface.read_reg(0x5007,2))}")
 
@@ -71,13 +72,14 @@ def main(ip_address):
             ## ~50 ADC counts threshold: 0x3FCE000012C
             ## >60 ADC counts threshold: 0x3FCE0000190
             # if ip==12:
-            #     print(f"[daniel] Special endpoint {ip}")
-            #     # print(f"[nacho] Special endpoint {ip}")
+            # #     print(f"[daniel] Special endpoint {ip}")
+            # #     interface.write_reg(0x6100,[0x3FCE0000190])
+            #     print(f"[nacho] Special endpoint {ip}")
             #     interface.write_reg(0x6001,[0xA500000000])
-            #     interface.write_reg(0x6100,[0x3FCE0000190])
+            #     interface.write_reg(0x7001,[0x3ED5])     # Threshold=-4 --> Test of self-trigger when a waveform is between 2 frames
             #     # interface.write_reg(0x7001,[0x3E55])   # Threshold=-4, slope with 3 samples
-            #     # interface.write_reg(0x7001,[0x3DD5]) # Threshold=-5, slope with 3 samples
-            #     # interface.write_reg(0x7001,[0x3E15]) # Threshold=-4, slope with 2 samples
+            # #     # interface.write_reg(0x7001,[0x3DD5]) # Threshold=-5, slope with 3 samples
+            # #     # interface.write_reg(0x7001,[0x3E15]) # Threshold=-4, slope with 2 samples
             # if ip==13:
             #     interface.write_reg(0x6001,[0x0000000A5])
 
