@@ -17,7 +17,7 @@ import json
 
 def main(map_location,ip_address,test):
 
-    map_file = map_location + ip_address + "_map.json"
+    map_file = map_location + ip_address + "_dic.json"
     with open(map_file, "r") as fp: 
             map = json.load(fp)
         
@@ -50,7 +50,7 @@ def main(map_location,ip_address,test):
             if fbk_op_bias[ch//8] < 950:
                 print("Setting bias in afe",ch//8, fbk_op_bias[ch//8])
                 if not test: apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {fbk_op_bias[ch//8]}')
-                print("Setting bias in ch",ch, fbk_op_trim[idx])
+                print("Setting trim in ch",ch, fbk_op_trim[idx])
                 if not test: apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {fbk_op_trim[idx]}')
             else:
                  print("Bias out of range - ABORT")
@@ -60,7 +60,7 @@ def main(map_location,ip_address,test):
             if hpk_op_bias[ch//8 - (len(fbk_op_bias))] < 1200:
                 print("Setting bias in afe",ch//8, hpk_op_bias[ch//8 - (len(fbk_op_bias))])
                 if not test: apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {hpk_op_bias[ch//8 - (len(fbk_op_bias))]}')
-                print("Setting bias in ch",ch, hpk_op_trim[idx-len(fbk)])
+                print("Setting trim in ch",ch, hpk_op_trim[idx-len(fbk)])
                 if not test: apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {hpk_op_trim[idx-len(fbk)]}')
 
     print("All set up, closing the interface")
