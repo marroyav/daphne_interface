@@ -24,14 +24,14 @@ def main(ip_address):
             warnings.warn(f'EndPoint {ip} not full-streaming (expecting 4,5 or 7), continuing with the next one...')
             continue
 
-        ip=f'10.73.137.{100+ip}'
-        interface = ivtools.daphne(ip)
+        long_ip=f'10.73.137.{100+ip}'
+        interface = ivtools.daphne(long_ip)
         configure = False
         interface.write_reg(0x2000,[1234]) #Write anything to trigger spybuffers
         reg = 0x5000
         
-        if configure: print(f'--- Configuring ip {ip} ---')
-        else:         print(f'--- Reading configuration ip {ip} ---')
+        if configure: print(f'--- Configuring ip {long_ip} ---')
+        else:         print(f'--- Reading configuration ip {long_ip} ---')
         
         if ip==4:
             for k in range (2):
