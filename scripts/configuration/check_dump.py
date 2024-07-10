@@ -9,6 +9,14 @@ def main(ip_address):
     
     Example: python conf_clocks.py (-ip 4,5)
     '''
+
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    RESET = "\033[0m"
     
     print(f"\033[35mExpecting: Error Count = 0 for all registers and the same DAPHNE firmaware version for all endpoints\033[0m")
     if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
@@ -29,9 +37,12 @@ def main(ip_address):
 
         for afe in range(5):
             for ch in range(9):
-                print("AFE%d[%d]: " % (afe,ch),end="")
+                print(f"AFE{afe}[{ch}]: ",end="")
                 for x in interface.read_reg(0x40000000+(afe*0x100000)+(ch*0x10000),15)[3:]:
-                    print("%04X " % x,end="")
+                    if ch ==8:
+                        print(f'{RED}{x:04X}{RESET}',end=" ")
+                    else:
+                        print(f'{CYAN}{x:04X}{RESET}',end=" ")
                 print()
             print()
 

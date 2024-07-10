@@ -13,6 +13,13 @@ def main(ip_address):
     
     Example: python conf_analog.py (-ip 4,5)
     '''
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    RESET = "\033[0m"
 
     print(f"\033[35mExpecting: The same firmware version and a Good to go!!! message for all endpoints\033[0m")
 
@@ -27,76 +34,76 @@ def main(ip_address):
         print(f"\n--------------------------------------")
         print(f"--------------------------------------")
         print(f"DAPHNE ip address {ip}")
-        print("DAPHNE firmware version %0X" % interface.read_reg(0x9000,1)[2])
-        print("test resgisters %0X" % interface.read_reg(0xaa55,1)[2])
-        print("endpoint address %0X" % interface.read_reg(0x4001,1)[2])
-        print("register 5001 %0X" % interface.read_reg(0x5001,1)[2])
-        print("register 3000 %0X" % interface.read_reg(0x3000,1)[2])
+        print(f"DAPHNE firmware version\t{YELLOW}{interface.read_reg(0x9000,1)[2]:08x}{RESET}")
+        print(f"test resgisters\t\t{interface.read_reg(0xaa55,1)[2]:08x}")
+        print(f"endpoint address\t{interface.read_reg(0x4001,1)[2]:08x}")
+        print(f"register 5001\t\t{interface.read_reg(0x5001,1)[2]:08x}")
+        print(f"register 3000\t\t{interface.read_reg(0x3000,1)[2]:08x}")
 
         epstat = interface.read_reg(0x4000,1)[2] # read_reg the timing endpoint and master cl    ock status register
 
         if (epstat & 0x00000001):
-                print("MMCM0 is LOCKED OK")
+                print(f"{GREEN}MMCM0 is LOCKED OK{RESET}")
         else:
-                print("Warning! MMCM0 is UNLOCKED, need a hard reset!")
+                print(f"{YELLOW}Warning! MMCM0 is UNLOCKED, need a hard reset!{RESET}")
 
         if (epstat & 0x00000002):
-                print("Master clock MMCM1 is LOCKED OK")
+                print(f"{GREEN}Master clock MMCM1 is LOCKED OK{RESET}")
         else:
-                print("Warning! Master clock MMCM1 is UNLOCKED!")
+                print(f"{YELLOW}Warning! Master clock MMCM1 is UNLOCKED!{RESET}")
 
         if (epstat & 0x00000010):
-                print("Warning! CDR chip loss of signal (LOS=1)")
+                print(f"{YELLOW}Warning! CDR chip loss of signal (LOS=1){RESET}")
         else:
-                print("CDR chip signal OK (LOS=0)")
+                print(f"{GREEN}CDR chip signal OK (LOS=0){RESET}")
 
         if (epstat & 0x00000020):
-                print("Warning! CDR chip UNLOCKED (LOL=1)")
+                print(f"{YELLOW}Warning! CDR chip UNLOCKED (LOL=1){RESET}")
         else:
-                print("CDR chip LOCKED (LOL=0) OK")
+                print(f"{GREEN}CDR chip LOCKED (LOL=0) OK{RESET}")
 
         if (epstat & 0x00000040):
-                print("Warning! Timing SFP module optical loss of signal (LOS=1)"    )
+                print(f"{YELLOW}Warning! Timing SFP module optical loss of signal (LOS=1){RESET}"    )
         else:
-                print("Timing SFP module optical signal OK (LOS=0)")
+                print(f"{GREEN}Timing SFP module optical signal OK (LOS=0){RESET}")
 
         if (epstat & 0x00000080):
-                print("Warning! Timing SFP module NOT DETECTED!")
+                print(f"{YELLOW}Warning! Timing SFP module NOT DETECTED!{RESET}")
         else:
-                print("Timing SFP module is present OK")
+                print(f"{GREEN}Timing SFP module is present OK{RESET}")
 
         if (epstat & 0x00001000):
-                print("Timing endpoint timestamp is valid")
+                print(f"{GREEN}Timing endpoint timestamp is valid{RESET}")
         else:
-                print("Warning! Timing endpoint timestamp is NOT valid")
+                print(f"{YELLOW}Warning! Timing endpoint timestamp is NOT valid{RESET}")
         ep_state = (epstat & 0xF00) >> 8  # timing endpoint state bits
 
         if ep_state==0:
-                print("Endpoint State = 0 : Starting state after reset")
+                print(f"{RED}Endpoint State = 0 : Starting state after reset{RESET}")
         elif ep_state==1:
-                print("Endpoint State = 1 : Waiting for SFP LOS to go low")
+                print(f"{RED}Endpoint State = 1 : Waiting for SFP LOS to go low{RESET}")
         elif ep_state==2:
-                print("Endpoint State = 2 : Waiting for good frequency check")
+                print(f"{RED}Endpoint State = 2 : Waiting for good frequency check{RESET}")
         elif ep_state==3:
-                print("Endpoint State = 3 : Waiting for phase adjustment to complete")
+                print(f"{RED}Endpoint State = 3 : Waiting for phase adjustment to complete{RESET}")
         elif ep_state==4:
-                print("Endpoint State = 4 : Waiting for comma alignment, stable 62.5MHz phase")
+                print(f"{RED}Endpoint State = 4 : Waiting for comma alignment, stable 62.5MHz phase{RESET}")
         elif ep_state==5:
-                print("Endpoint State = 5 : Waiting for 8b10 decoder good packet")
+                print(f"{RED}Endpoint State = 5 : Waiting for 8b10 decoder good packet{RESET}")
         elif ep_state==6:
-                print("Endpoint State = 6 : Waiting for phase adjustment command")
+                print(f"{RED}Endpoint State = 6 : Waiting for phase adjustment command{RESET}")
         elif ep_state==7:
-                print("Endpoint State = 7 : Waiting for time stamp initialization")
+                print(f"{RED}Endpoint State = 7 : Waiting for time stamp initialization{RESET}")
         elif ep_state==8:
-                print("Endpoint State = 8 : Good to go!!!")
+                print(f"{GREEN}Endpoint State = 8 : Good to go!!!{RESET}")
         elif ep_state==12:
-                print("Endpoint State = 12 : Error in rx")
+                print(f"{RED}Endpoint State = 12 : Error in rx{RESET}")
         elif ep_state==13:
-                print("Endpoint State = 13 : Error in time stamp check")
+                print(f"{RED}Endpoint State = 13 : Error in time stamp check{RESET}")
         elif ep_state==14:
-                print("Endpoint State = 14 : Physical layer error after lock")
+                print(f"{RED}Endpoint State = 14 : Physical layer error after lock{RESET}")
         else:
-                print("Endpoint State = %d : warning! undefined state!" %ep_state)
+                print(f"{YELLOW}Endpoint State = {ep_state} : warning! undefined state!{RESET}")
 
         interface.close()
 

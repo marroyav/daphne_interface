@@ -29,6 +29,7 @@ def main(ip_address):
     BLUE = "\033[34m"
     MAGENTA = "\033[35m"
     CYAN = "\033[36m"
+    WHITE = "\033[37m"
     RESET = "\033[0m"
 
     if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
@@ -40,18 +41,18 @@ def main(ip_address):
             exit()
         interface = ivtools.daphne(f"10.73.137.{100+ip}")
         interface.write_reg(0x2001, [1234]) # software trigger, all spy buffers capture
-        print (f"{BLUE}Checking Counters{RESET}")
-        print (f"{BLUE}ADDRESS{RESET}",end='\t')
-        print (f"{RED}10.73.137.{100+ip}{RESET}")
-        print (f"{CYAN}CH{RESET}", end='\t')
-        print (f"{CYAN}TRIGGER{RESET}", end='\t\t')
-        print (f"{CYAN}FIFO{RESET}", end='\t\t')
-        print (f"{CYAN}FLX{RESET}")
+        print (f"{GREEN}Checking Counters{RESET}")
+        print (f"{MAGENTA}ADDRESS{RESET}",end='\t')
+        print (f"{MAGENTA}10.73.137.{100+ip}{RESET}")
+        print (f"{WHITE}CH{RESET}", end='\t')
+        print (f"{WHITE}TRIGGER{RESET}", end='\t\t')
+        print (f"{WHITE}FIFO{RESET}", end='\t\t')
+        print (f"{WHITE}FLX{RESET}")
         trigger = [(interface.read_reg(0x40800000+n*0x8,1)[2]) for n in range(40)  ]
         fifo = [(interface.read_reg(0x40800140+n*0x8,1)[2]) for n in range(40)]
         flx = (interface.read_reg(0x40800280,1)[2])
         for i in range (40):
-            print(f"{CYAN}{i:02}\t{GREEN}{trigger[i]:010}\t{GREEN}{fifo[i]:010}\t{YELLOW}{flx:010}{RESET}" )
+            print(f"{WHITE}{i:02}\t{GREEN}{trigger[i]:010}\t{GREEN}{fifo[i]:010}\t{YELLOW}{flx:010}{RESET}" )
         
         interface.close()
 

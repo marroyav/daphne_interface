@@ -21,8 +21,15 @@ def main(ip_address):
     
     Example: python conf_analog.py (-ip 4,5)
     '''
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    RESET = "\033[0m"
     print ("DAPHNE physical scheme")
-    print ("ADDRESS", end='\t')
+    print ("ADDRESS", end='\t\t')
     print ("SLOT", end='\t')
     print ("REG", end='\t')
     print ("MODE")
@@ -42,9 +49,9 @@ def main(ip_address):
         print(f"{slot}",end='\t')
         print(f"{hex(sender)}",end='\t')
 
-        if   sender==0xaa: print(f"full streaming")
-        elif sender==0x3:  print(f"self trigger")
-        else:              print("disabled")
+        if   sender==0xaa: print(f"{CYAN}full streaming{RESET}")
+        elif sender==0x3:  print(f"{GREEN}self trigger{RESET}")
+        else:              print(f"{RED}disabled{RESET}")
         
         interface.close()
 
