@@ -25,7 +25,7 @@ def main(ip_address):
         interface = ivtools.daphne(f"10.73.137.{100+ip}")
         interface.write_reg(0x2000, [1234])
         rec=[]
-        print(f"\033[91m\nChecking ip address 192.168.121.{ip} data out in DAPHNE:\033[0m")
+        print(f"\033[91m\nChecking ip address 10.73.137.{ip+100} data out in DAPHNE:\033[0m")
         print()
         for i in range (10):
             doutrec = interface.read_reg(0x40600000+i*128,128)
