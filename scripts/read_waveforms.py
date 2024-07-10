@@ -35,9 +35,13 @@ def main(ip_address):
         # print (hex(rec[0]))
         for i in range (len(rec)):
             if rec[i] == 0x000000BC:
-                print("%08X" % rec[i])
+                print(f"\033[36m{rec[i]:08X}\033[0m")
+            elif rec[i] == 0xFFFFFFFF:
+                print(f"\033[31m{rec[i]:08X}\033[0m",end=' ')
+            elif rec[i] == 0x0000003C:
+                print(f"\033[32m{rec[i]:08X}\033[0m")
             else:
-                print("%08X" % rec[i],end=' ')
+                print(f"{rec[i]:08X}",end=' ')
     interface.close()
 
 if __name__ == "__main__":
