@@ -34,7 +34,8 @@ def run_checks(ip_address):
     # List of scripts to run
     config_scripts = ["check_datamodes.py", 
                       "check_endpoints.py", 
-                      "check_timestamp.py"]
+                      "check_timestamp.py",
+                      "check_counters.py"]
 
     # Execute the scripts
     for script in config_scripts: 
