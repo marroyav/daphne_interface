@@ -7,44 +7,63 @@ import time
 import unicodedata
 import socket
 import struct
+import signal
+
+def signal_handler(signum, frame):
+    time.sleep(0.5)
+    raise TimeoutError("Command execution timed out")
+
+def timeout_handler(func):
+    def wrapper(*args, **kwargs):
+        signal.signal(signal.SIGALRM, signal_handler)
+
+        while True:
+            signal.alarm(1)
+            try:
+                result = func(*args, **kwargs)
+                signal.alarm(0)
+            except:
+                continue
+            return result
+    return wrapper
 
 class daphne(object):
-
+    @timeout_handler
     def __init__(self,ipaddr,port=2001):
         self.sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.target = (ipaddr,port)
-
+    @timeout_handler
     def read_reg(self,addr,size):
         cmd = struct.pack("BB",0x00,size)
         cmd += struct.pack("Q",addr)
         self.sock.sendto(cmd,self.target)
         d,a = self.sock.recvfrom(2+(8*size))
         return struct.unpack(f"<BB{size}Q",d)
-
+    @timeout_handler
     def write_reg(self,addr,data):
         cmd = struct.pack("BB",1,len(data))
         cmd += struct.pack("Q",addr)
         for i in data:
             cmd += struct.pack("Q",i)
         self.sock.sendto(cmd,self.target)
-
+    @timeout_handler
     def read_fifo(self,addr,size):
         cmd = struct.pack("BB",0x08,size)
         cmd += struct.pack("Q",addr)
         self.sock.sendto(cmd,self.target)
         d,a = self.sock.recvfrom(2+(8*size))
         return struct.unpack(f"<BB{size}Q",d)
-
+    @timeout_handler
     def write_fifo(self,addr,data):
         cmd = struct.pack("BB",0x09,len(data))
         cmd += struct.pack("Q",addr)
         for i in data:
             cmd += struct.pack("Q",i)
         self.sock.sendto(cmd,self.target)
-
+    @timeout_handler
     def close(self):
         self.sock.close()
-
+    @timeout_handler
     def command(self, cmd_string):
         cmd_bytes = [ord(ch) for ch in cmd_string]
         cmd_bytes.append(0x0d)
