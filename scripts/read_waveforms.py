@@ -35,7 +35,10 @@ def main(ip_address):
         # print (hex(rec[0]))
         for i in range (len(rec)):
             if rec[i] == 0x000000BC:
-                print(f"\033[36m{rec[i]:08X}\033[0m")
+                if rec[i-1] == 0x000000BC:
+                    pass
+                else:
+                    print(f"\033[36m{rec[i]:08X}\033[0m")
             elif rec[i] == 0xFFFFFFFF:
                 print(f"\033[31m{rec[i]:08X}\033[0m",end=' ')
             elif rec[i] == 0xDEADBEEF:
