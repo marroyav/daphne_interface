@@ -43,6 +43,7 @@ def main(ip_address):
         print (f"{BLUE}Checking Counters{RESET}")
         print (f"{BLUE}ADDRESS{RESET}",end='\t')
         print (f"{RED}10.73.137.{100+ip}{RESET}")
+        print (f"{CYAN}CH{RESET}", end='\t')
         print (f"{CYAN}TRIGGER{RESET}", end='\t\t')
         print (f"{CYAN}FIFO{RESET}", end='\t\t')
         print (f"{CYAN}FLX{RESET}")
@@ -50,7 +51,7 @@ def main(ip_address):
         fifo = [(interface.read_reg(0x40800140+n*0x8,1)[2]) for n in range(40)]
         flx = (interface.read_reg(0x40800280,1)[2])
         for i in range (40):
-            print(f"{GREEN}{trigger[i]:010}",end='\t'),print(f"{GREEN}{fifo[i]:010}",end='\t'),print(f"{YELLOW}{flx:010}{RESET}",end='\t'),print()
+            print(f"{CYAN}{i:02}\t{GREEN}{trigger[i]:010}\t{GREEN}{fifo[i]:010}\t{YELLOW}{flx:010}{RESET}" )
         
         interface.close()
 
