@@ -6,6 +6,8 @@ def main(ip_address):
     '''
     This script checks that the data output in DAPHNE is OK.
     The expected output are chucks of data with the structure of the frames configured in data modes.
+    Self triggered endpoints might print an undeterministic ammount of waveforms since those will have many IDLEs
+    If you arrange the terminal in columns multiples of 7 you can see the pattern 
 
     Args: 
         - ip_address (default='ALL'): if no argument given it runs over all endpoints.
@@ -31,8 +33,7 @@ def main(ip_address):
             doutrec = interface.read_reg(0x40600000+i*128,128)
             for word in doutrec[2:]:
                 rec.append(word)
-        #  for word in doutrec[3:]:
-        # print (hex(rec[0]))
+
         for i in range (len(rec)):
             if rec[i] == 0x000000BC:
                 if rec[i-1] == 0x000000BC:
@@ -46,7 +47,10 @@ def main(ip_address):
             elif rec[i] == 0x0000003C:
                 print(f"\033[32m{rec[i]:08X}\033[0m")
             else:
-                print(f"{rec[i]:08X}",end=' ')
+                if rec[i-1] == 0x0000003C:
+                    print(f"\033[33m{rec[i]:08X}\033[0m",end=' ')
+                else:
+                    print(f"{rec[i]:08X}",end=' ')
     interface.close()
 
 if __name__ == "__main__":
