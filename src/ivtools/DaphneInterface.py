@@ -84,7 +84,7 @@ class daphne(object):
                 elif chr(b).isprintable:
                     self.more = 40
                     response = response + chr(b)
-            sleep(0.007)
+            sleep(0.002)
             self.more -= 1
         response = response + chr(0)
         return self.remove_control_characters(response)
