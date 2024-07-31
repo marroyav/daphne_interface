@@ -16,11 +16,11 @@ import json
 @click.option("--bias_start_hpk", '-bsh', default=850,help="Starting bias DAC counts for HPK")
 @click.option("--bias_start_fbk", '-bsf', default=500,help="Starting bias DAC counts for FBK")
 @click.option("--bias_step", '-bs', default=10,help="DAC counts per step")
-@click.option("--trim_step", '-ts', default=40,help="Trim DAC counts per step")
+@click.option("--trim_step", '-ts', default=20,help="Trim DAC counts per step")
 @click.option("--trim_max", '-tm', default=3800,help="Maximum trim DAC counts")
 @click.option("--current_thr_hpk", '-cth', default=0.6,help="Maximum allowed current for HPK")
 @click.option("--current_thr_fbk", '-ctf', default=0.4,help="Maximum allowed current for FBK")
-@click.option("--point_iterations", '-it', default=2,help="Number of iterations per point")
+@click.option("--point_iterations", '-it', default=4,help="Number of iterations per point")
 @click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
 
 def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,current_thr_hpk,current_thr_fbk,point_iterations,ip_address):
