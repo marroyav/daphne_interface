@@ -29,8 +29,8 @@ def run_config(ip_address):
     if ip_address=="ALL": pass
     else:
         for ip in list(map(int, list(ip_address.split(",")))):
-            if ip not in [4,5,7,9,11,12,13]: 
-                print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+            if ip not in [4,5,10,9,11,12,13]: 
+                print("\033[91mInvalid IP address, please choose your ip between 4,5,10,9,11,12,13 :)\033[0m"); 
                 exit()
 
     # List of scripts to run

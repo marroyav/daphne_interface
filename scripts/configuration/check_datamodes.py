@@ -10,7 +10,7 @@ def main(ip_address):
         ADDRESS         SLOT    REG     MODE
         10.73.137.104   4       0xaa    full streaming
         10.73.137.105   5       0xaa    full streaming
-        10.73.137.107   7       0xaa    full streaming
+        10.73.137.110   7       0xaa    full streaming
         10.73.137.109   9       0x3     self trigger
         10.73.137.111   11      0x3     self trigger
         10.73.137.112   12      0x3     self trigger
@@ -34,12 +34,12 @@ def main(ip_address):
     print ("REG", end='\t')
     print ("MODE")
 
-    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
+    if ip_address=="ALL": your_ips = [4,5,10,9,11,12,13]
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
 
     for ip in your_ips:
-        if ip not in [4,5,7,9,11,12,13]: 
-            print("\033[91mInvalid IP address, please choose your ip between 4,5,7,9,11,12,13 :)\033[0m"); 
+        if ip not in [4,5,10,9,11,12,13]: 
+            print("\033[91mInvalid IP address, please choose your ip between 4,5,10,9,11,12,13 :)\033[0m"); 
             exit()
         interface = ivtools.daphne(f"10.73.137.{100+ip}")
         print(f"10.73.137.{100+ip}",end='\t')

@@ -11,7 +11,7 @@ command_to_run="python bias_trim_scan.py -ip 10.73.137."
 if [ -n "$1" ];then
     IFS=' ' read -r -a your_ips <<< "$1"
     else
-        your_ips=(104 105 107 109 111 112 113)
+        your_ips=(104 105 110 109 111 112 113)
 fi
 
 # The confirmation message need to be run with $ bash setup.sh (this lines are to allow $ sh setup.sh too)

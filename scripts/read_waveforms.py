@@ -17,11 +17,11 @@ def main(ip_address):
     
     print(f"\033[35mExpecting: Different waveforms\033[0m")
 
-    if ip_address=="ALL": your_ips = [4,5,7,9,11,12,13]
+    if ip_address=="ALL": your_ips = [4,5,10,9,11,12,13]
     else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
 
     for ip in your_ips:
-        if ip not in [4,5,7,9,11,12,13]: 
+        if ip not in [4,5,10,9,11,12,13]: 
             print("\033[91mInvalid IP address, please choose your ip between 40 :)\033[0m"); 
             exit()
         interface = ivtools.daphne(f"10.73.137.{100+ip}")

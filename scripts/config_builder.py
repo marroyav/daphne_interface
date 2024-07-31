@@ -34,7 +34,7 @@ def transform_map(map_file):
 map_list = [
       './../maps/10.73.137.104_dic.json',
       './../maps/10.73.137.105_dic.json',
-      './../maps/10.73.137.107_dic.json',
+      './../maps/10.73.137.110_dic.json',
       './../maps/10.73.137.109_dic.json',
       './../maps/10.73.137.111_dic.json',
       './../maps/10.73.137.112_dic.json',
