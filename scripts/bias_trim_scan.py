@@ -13,16 +13,17 @@ import json
 
 @click.command()
 @click.option("--map_file", '-map', default="./../maps/iv_map.json",help="Input file with channel starting bias mapping")
-@click.option("--bias_start_hpk", '-bsh', default=850,help="starting bias DAC counts for HPK")
-@click.option("--bias_start_fbk", '-bsf', default=500,help="starting bias DAC counts for FBK")
+@click.option("--bias_start_hpk", '-bsh', default=850,help="Starting bias DAC counts for HPK")
+@click.option("--bias_start_fbk", '-bsf', default=500,help="Starting bias DAC counts for FBK")
 @click.option("--bias_step", '-bs', default=10,help="DAC counts per step")
-@click.option("--trim_step", '-ts', default=40,help="trim DAC counts per step")
-@click.option("--trim_max", '-tm', default=3800,help="maximum trim DAC counts")
-@click.option("--current_thr_hpk", '-cth', default=0.6,help="maximum allowed current for HPK")
-@click.option("--current_thr_fbk", '-ctf', default=0.4,help="maximum allowed current for FBK")
+@click.option("--trim_step", '-ts', default=40,help="Trim DAC counts per step")
+@click.option("--trim_max", '-tm', default=3800,help="Maximum trim DAC counts")
+@click.option("--current_thr_hpk", '-cth', default=0.6,help="Maximum allowed current for HPK")
+@click.option("--current_thr_fbk", '-ctf', default=0.4,help="Maximum allowed current for FBK")
+@click.option("--point_iterations", '-it', default=2,help="Number of iterations per point")
 @click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
 
-def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,current_thr_hpk,current_thr_fbk,ip_address):
+def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,current_thr_hpk,current_thr_fbk,point_iterations,ip_address):
     
     with open(map_file, "r") as fp:
         map = json.load(fp)
@@ -78,7 +79,7 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
         for bv in tqdm(range(bias_start_hpk if ch in hpk else bias_start_fbk, bias_stop, bias_step), desc=f"Running bias scan on ch_{ch}..."):
 
             apply_bias_cmd = interface.command(f'WR BIASSET AFE {ch//8} V {bv}')
-            current = interface.read_current(ch=ch,iterations=2)
+            current = interface.read_current(ch=ch,iterations=point_iterations)
 
             bias_dac.append(bv)
             bias_volt.append(interface.read_bias()[ch//8])
