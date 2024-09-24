@@ -1,4 +1,4 @@
-"""                                                               
+"""
 Simple IV scanner using both the BIAS and TRIM controls in DAPHNE
 double scan bias (forward) plus trim (backwards)
 """
@@ -12,22 +12,22 @@ from numpy import array
 import json
 
 @click.command()
-@click.option("--map_file", '-map', default="./../maps/iv_map.json",help="Input file with channel starting bias mapping")
+@click.option("--map_file", '-map', default="./../maps/iv_map_st.json",help="Input file with channel starting bias mapping")
 @click.option("--bias_start_hpk", '-bsh', default=850,help="Starting bias DAC counts for HPK")
 @click.option("--bias_start_fbk", '-bsf', default=500,help="Starting bias DAC counts for FBK")
 @click.option("--bias_step", '-bs', default=10,help="DAC counts per step")
-@click.option("--trim_step", '-ts', default=20,help="Trim DAC counts per step")
+@click.option("--trim_step", '-ts', default=40,help="Trim DAC counts per step")
 @click.option("--trim_max", '-tm', default=3800,help="Maximum trim DAC counts")
 @click.option("--current_thr_hpk", '-cth', default=0.6,help="Maximum allowed current for HPK")
 @click.option("--current_thr_fbk", '-ctf', default=0.4,help="Maximum allowed current for FBK")
-@click.option("--point_iterations", '-it', default=4,help="Number of iterations per point")
+@click.option("--point_iterations", '-it', default=2,help="Number of iterations per point")
 @click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
 
 def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,current_thr_hpk,current_thr_fbk,point_iterations,ip_address):
-    
+
     with open(map_file, "r") as fp:
         map = json.load(fp)
-        
+
     print("Imported map from ",map_file,":")
     print(map)
 
@@ -36,7 +36,7 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
     hpk = map[ip_address]['hpk']
     fbk_value = map[ip_address]['fbk_value']
     hpk_value = map[ip_address]['hpk_value']
-    
+
     print("Scanning APA", apa)
     print("Setting maximum bias value of", fbk_value, "for FBK chhannels", fbk)
     print("Setting maximum bias value of", hpk_value, "for HPK chhannels", hpk)
@@ -64,7 +64,7 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
         bias_dac=[]
         bias_volt=[]
         current_bias_scan=[]
-        
+
         time_start = [strftime('%b-%d-%Y_%H%M', localtime())]
 
         bias_stop = hpk_value[idx-len(fbk)] if ch in hpk else fbk_value[idx]
@@ -86,7 +86,7 @@ def main(map_file,bias_start_hpk,bias_start_fbk,bias_step,trim_step,trim_max,cur
             current_bias_scan.append(current)
 
             if (abs(current) > abs(current_thr_hpk) and ch in hpk) or (abs(current) > abs(current_thr_fbk) and ch in fbk) or bv >= bias_stop-bias_step:
-                
+
                 for tv in tqdm(range(0, trim_max, trim_step), desc=f"Running trim scan on ch_{ch}..."):
 
                     apply_trim_cmd = interface.command(f'WR TRIM CH {ch} V {tv}')
