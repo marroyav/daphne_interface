@@ -19,7 +19,7 @@ def main(facility, ip_address):
     """
     # Define IP sets for each facility
     facility_ips = {
-        'np02': [5, 6],
+        'np02': [7],
         'np04': [4, 9, 11, 12, 13],
         'vdcoldbox': [4, 5, 10],  # Add IPs for 'vdcoldbox' as needed
     }

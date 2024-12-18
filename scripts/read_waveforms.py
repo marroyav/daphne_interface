@@ -1,57 +1,106 @@
-import ivtools, click
+import click
+from ivtools import Daphne
 
 @click.command()
-@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
+@click.option("--ip_address", '-ip', default='ALL', help="Last digits of the IP address (comma-separated) or 'ALL'")
 def main(ip_address):
-    '''
+    """
     This script checks that the data output in DAPHNE is OK.
-    The expected output are chucks of data with the structure of the frames configured in data modes.
-    Self triggered endpoints might print an undeterministic ammount of waveforms since those will have many IDLEs
-    If you arrange the terminal in columns multiples of 7 you can see the pattern 
+    The expected output are chunks of data with the structure of the frames configured in data modes.
+    Self-triggered endpoints might print an undeterministic amount of waveforms due to many IDLEs.
+    If you arrange the terminal in columns multiples of 7, you can see the pattern.
 
-    Args: 
-        - ip_address (default='ALL'): if no argument given it runs over all endpoints.
-    
-    Example: python conf_analog.py (-ip 4,5)
-    '''
-    
-    print(f"\033[35mExpecting: Different waveforms\033[0m")
+    Args:
+        - ip_address (default='ALL'): If 'ALL', runs on all predefined endpoints.
+                                     If digits, runs only on those endpoints.
 
-    if ip_address=="ALL": your_ips = [4,5,10,9,11,12,13]
-    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
+    Example:
+        python check_data_output.py --ip_address 4,5
+        python check_data_output.py --ip_address ALL
+    """
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    BLUE = "\033[36m"
+    YELLOW = "\033[33m"
+    MAGENTA = "\033[35m"
+    RESET = "\033[0m"
 
-    for ip in your_ips:
-        if ip not in [4,5,10,9,11,12,13]: 
-            print("\033[91mInvalid IP address, please choose your ip between 40 :)\033[0m"); 
-            exit()
-        interface = ivtools.daphne(f"10.73.137.{100+ip}")
-        interface.write_reg(0x2000, [1234])
-        rec=[]
-        print(f"\033[91m\nChecking ip address 10.73.137.{ip+100} data out in DAPHNE:\033[0m")
-        print()
-        for i in range (10):
-            doutrec = interface.read_reg(0x40600000+i*128,128)
-            for word in doutrec[2:]:
-                rec.append(word)
+    print(f"{MAGENTA}Expecting: Different waveforms{RESET}")
 
-        for i in range (len(rec)):
-            if rec[i] == 0x000000BC:
-                if rec[i-1] == 0x000000BC:
-                    pass
-                else:
-                    print(f"\033[36m{rec[i]:08X}\033[0m")
-            elif rec[i] == 0xFFFFFFFF:
-                print(f"\033[31m{rec[i]:08X}\033[0m",end=' ')
-            elif rec[i] == 0xDEADBEEF:
-                print(f"\033[33m{rec[i]:08X}\033[0m",end=' ')
-            elif rec[i] == 0x0000003C:
-                print(f"\033[32m{rec[i]:08X}\033[0m")
+    # Predefined valid IPs
+    valid_ips = [4, 5, 7, 10, 9, 11, 12, 13]
+
+    # Process input argument
+    if ip_address.upper() == "ALL":
+        selected_ips = valid_ips
+    else:
+        try:
+            selected_ips = list(map(int, ip_address.split(",")))
+        except ValueError:
+            print(f"{RED}Invalid IP address input. Use 'ALL' or comma-separated numbers.{RESET}")
+            return
+
+    # Validate selected IPs
+    invalid_ips = [ip for ip in selected_ips if ip not in valid_ips]
+    if invalid_ips:
+        print(f"{RED}Invalid IP(s) detected: {invalid_ips}. Valid options are: {valid_ips}.{RESET}")
+        return
+
+    # Check data output for each selected IP
+    for ip in selected_ips:
+        full_ip = f"10.73.137.{100 + ip}"
+        print(f"\n{RED}Checking IP address {full_ip} data out in DAPHNE:{RESET}\n")
+
+        try:
+            # Initialize Daphne instance
+            interface = Daphne(full_ip)
+            interface.write_reg(0x2000, [1234])  # Trigger spy buffers
+            rec = []
+
+            # Read data from the registers
+            for i in range(10):
+                doutrec = interface.read_reg(0x40600000 + i * 128, 128)
+                rec.extend(doutrec[2:])  # Skip metadata
+
+            # Print formatted data output
+            print_formatted_output(rec)
+
+            # Close the interface
+            interface.close()
+
+        except Exception as e:
+            print(f"{RED}Error while processing IP {full_ip}: {e}{RESET}")
+
+
+def print_formatted_output(data):
+    """
+    Print formatted output for the given data.
+
+    Args:
+        - data: List of integers representing data output.
+    """
+    BLUE = "\033[36m"
+    RED = "\033[31m"
+    YELLOW = "\033[33m"
+    GREEN = "\033[32m"
+    RESET = "\033[0m"
+
+    for i, word in enumerate(data):
+        if word == 0x000000BC:
+            if i > 0 and data[i - 1] != 0x000000BC:
+                print(f"{BLUE}{word:08X}{RESET}")
+        elif word == 0xFFFFFFFF:
+            print(f"{RED}{word:08X}{RESET}", end=' ')
+        elif word == 0xDEADBEEF:
+            print(f"{YELLOW}{word:08X}{RESET}", end=' ')
+        elif word == 0x0000003C:
+            print(f"{GREEN}{word:08X}{RESET}")
+        else:
+            if i > 0 and data[i - 1] == 0x0000003C:
+                print(f"{YELLOW}{word:08X}{RESET}", end=' ')
             else:
-                if rec[i-1] == 0x0000003C:
-                    print(f"\033[33m{rec[i]:08X}\033[0m",end=' ')
-                else:
-                    print(f"{rec[i]:08X}",end=' ')
-    interface.close()
+                print(f"{word:08X}", end=' ')
+
 
 if __name__ == "__main__":
     main()

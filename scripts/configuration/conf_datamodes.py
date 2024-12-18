@@ -1,109 +1,134 @@
-import ivtools, click
+import click
+from ivtools import Daphne
 
 @click.command()
-@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
+@click.option("--ip_address", '-ip', default='ALL', help="Last digits of the IP address (comma-separated) or 'ALL'")
 def main(ip_address):
-    '''
-    Configure in DAPHNE the data modes for each endpoint:
-        - 104, 105, 107 are expected in self-trigger (0x3) 
-        - 109, 111, 112, 113 are expected in full streaming (0xAA)
-    Set output record parameters  (0x3000)
-    Set thresholds (self-trigger) (0x6000)
-    
-    Args: 
-        - ip_address (default='ALL'): if no argument given it runs over all endpoints.
-    
-    Example: python conf_datamodes.py (-ip 4,5)
-    '''
-    
-    if ip_address=="ALL": your_ips = [4,5,10,9,11,12,13,6]
-    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
+    """
+    Configure DAPHNE data modes for endpoints.
 
-    data_mode = {4: ["full_stream", 0x001081,0xffff],                  # ALL CHANNELS
-                 5: ["full_stream", 0x001081,0x5a0a5ff],               # ALL CHANNELS
-                 7: ["full_stream", 0x001081,0xa9a5],                  # ALL CHANNELS
-                 9: ["hi_rate_self_trigger", 0x001081,0xffffffffff],   # ALL CHANNELS
-                #  9: ["hi_rate_self_trigger", 0x001081,0xa5ffffffff], # CH: 1,3,5,7 disabled
-                 11:["hi_rate_self_trigger", 0x002081,0xffffffffff],   # ALL CHANNELS
-                 12:["hi_rate_self_trigger", 0x002081,0xa5ffffffff],   # CH: ?
-                 13:["hi_rate_self_trigger", 0x002081,0xa5]            # CH: 0,2,5,7 (all for this endpoint)
-                 }
-    print(f"\033[35mExpecting: The same parameters output (Crate number) for all endpoints\033[0m")
-    
-    threshold = input(f"\nFor this script you need to specify your threshold [CALIB: 9000, COMIC: 600]:  ")
-    threshold = int(threshold)
+    Args:
+        - ip_address (default='ALL'): If 'ALL', runs on all predefined IPs.
+                                     If digits, runs only on those endpoints.
 
-    for ip in your_ips: 
-        if ip not in [4,5,10,9,11,12,13,6]: 
-            print("\033[91mInvalid IP address, please choose your ip between 4,5,10,9,11,12,13,6 :)\033[0m"); 
-            exit()
-        interface = ivtools.daphne(f"10.73.137.{100+ip}")
-        print(f"\nConfiguring endpoint 10.73.137.{100+ip}")
-        trigger = data_mode[ip][0] # trigger mode
-        d0x3000 = data_mode[ip][1] #
-        d0x6001 = data_mode[ip][2] #40 channels register that configures what channels are being saved
+    Example:
+        python conf_datamodes.py --ip_address 4,5
+        python conf_datamodes.py --ip_address ALL
+    """
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"
 
-        if trigger == "full_stream":
-            interface.write_reg(0x3000,[d0x3000+ip*0x400000])
-            print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
-            interface.write_reg(0x3001,[0xaa])
-            print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6001,[d0x6001])
-            print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
-            print(f"reg 0x5007 = {(interface.read_reg(0x5007,2))}")
+    print(f"{GREEN}Configuring data modes for selected DAPHNE endpoints.{RESET}")
 
-            interface.close()
-        
-        if trigger == "hi_rate_self_trigger":
-            interface.write_reg(0x3000,[d0x3000+ip*0x400000])
-            print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
-            interface.write_reg(0x3001,[0x3])
-            print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6000,[threshold])  # Setting threshold [ADC counts] with user input
-            print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
-            interface.write_reg(0x6001,[d0x6001]) # Setting channels to make trigger with map information
-            #Avoid matching-trigger #commenting this line will enable matching trigger
-            # if ip==11: 
-            #     ## Daniel Avila self-trigger
-            #     print(f"[daniel] Special endpoint {ip}")
-            #     interface.write_reg(0x6001,[0x0000A50000])
-                # interface.write_reg(0x6100,[0x3FCE0000190]) 
-            ## disenable :0x3FB03FFFFFF
-            ## ~50 ADC counts threshold: 0x3FCE000012C
-            ## >60 ADC counts threshold: 0x3FCE0000190
-            # if ip==12:
-            # #     print(f"[daniel] Special endpoint {ip}")
-            # #     interface.write_reg(0x6100,[0x3FCE0000190])
-            #     print(f"[nacho] Special endpoint {ip}")
-            #     interface.write_reg(0x6001,[0xA500000000])
-            #     interface.write_reg(0x7001,[0x3ED5])     # Threshold=-4 --> Test of self-trigger when a waveform is between 2 frames
-            #     # interface.write_reg(0x7001,[0x3E55])   # Threshold=-4, slope with 3 samples
-            # #     # interface.write_reg(0x7001,[0x3DD5]) # Threshold=-5, slope with 3 samples
-            # #     # interface.write_reg(0x7001,[0x3E15]) # Threshold=-4, slope with 2 samples
-            # if ip==13:
-            #     interface.write_reg(0x6001,[0x0000000A5])
+    # Predefined valid IPs
+    valid_ips = [4, 5, 10, 9, 11, 12, 13, 7, 6]
 
-            print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
-        
-        if trigger == "low_rate_self_trigger":
-            interface.write_reg(0x3000,[d0x3000+ip*0x400000])
-            print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
-            interface.write_reg(0x3001,[0x3])
-            print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6000,[30])
-            print(f"threshhold = {interface.read_reg(0x6000,1)[2]}")
-            interface.write_reg(0x6001,[0b0])
-            print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
+    # Process input argument
+    if ip_address.upper() == "ALL":
+        selected_ips = valid_ips
+    else:
+        try:
+            selected_ips = list(map(int, ip_address.split(",")))
+        except ValueError:
+            print(f"{RED}Invalid IP address input. Use 'ALL' or comma-separated numbers.{RESET}")
+            return
 
-        if trigger == "disable":
-            interface.write_reg(0x3000,[d0x3000+ip*0x400000])
-            print(f"parameters =  {hex(interface.read_reg(0x3000,1)[2])}")
-            interface.write_reg(0x3001,[0x0])
-            print(f"data mode = {hex(interface.read_reg(0x3001,1)[2])}")
-            interface.write_reg(0x6001,[0b00000000])
-            print(f"channels active = {interface.read_reg(0x6001,1)[2]}")
+    # Validate selected IPs
+    invalid_ips = [ip for ip in selected_ips if ip not in valid_ips]
+    if invalid_ips:
+        print(f"{RED}Invalid IP(s) detected: {invalid_ips}. Valid options are: {valid_ips}.{RESET}")
+        return
+
+    # Data mode configuration
+    data_mode = {
+        4: ["full_stream", 0x001081, 0xFFFF],
+        5: ["full_stream", 0x001081, 0x5A0A5FF],
+        7: ["full_stream", 0x001081, 0xA9A5],  # Channels for endpoint 7
+        9: ["hi_rate_self_trigger", 0x001081, 0xFFFFFFFFFF],
+        11: ["hi_rate_self_trigger", 0x002081, 0xFFFFFFFFFF],
+        12: ["hi_rate_self_trigger", 0x002081, 0xA5FFFFFFFF],
+        13: ["hi_rate_self_trigger", 0x002081, 0xA5],
+    }
+
+    # Threshold input
+    try:
+        threshold = int(input(f"{YELLOW}Enter threshold [CALIB: 9000, COMIC: 600]: {RESET}"))
+    except ValueError:
+        print(f"{RED}Invalid threshold input. Please enter a numeric value.{RESET}")
+        return
+
+    # Configure each selected IP
+    for ip in selected_ips:
+        full_ip = f"10.73.137.{100 + ip}"
+        print(f"\nConfiguring endpoint {full_ip}")
+
+        try:
+            # Initialize Daphne instance
+            interface = Daphne(full_ip)
+
+            # Retrieve data mode details
+            trigger, d0x3000, d0x6001 = data_mode[ip]
+
+            if trigger == "full_stream":
+                configure_full_stream(interface, ip, d0x3000, d0x6001)
+
+            elif trigger == "hi_rate_self_trigger":
+                configure_hi_rate_self_trigger(interface, ip, d0x3000, d0x6001, threshold)
+
+            # Special configuration for endpoint 7
+            if ip == 7:
+                configure_channels(interface, [0, 7, 8, 15, 16, 23, 24, 31, 32, 39])
 
             interface.close()
+
+        except Exception as e:
+            print(f"{RED}Error while processing IP {full_ip}: {e}{RESET}")
+
+
+def configure_full_stream(interface, ip, d0x3000, d0x6001):
+    """Configure full stream mode."""
+    GREEN = "\033[32m"
+    RESET = "\033[0m"
+
+    interface.write_reg(0x3000, [d0x3000 + ip * 0x400000])
+    print(f"Parameters: {GREEN}{hex(interface.read_reg(0x3000, 1)[2])}{RESET}")
+
+    interface.write_reg(0x3001, [0xAA])
+    print(f"Data mode: {GREEN}{hex(interface.read_reg(0x3001, 1)[2])}{RESET}")
+
+    interface.write_reg(0x6001, [d0x6001])
+    print(f"Channels active: {GREEN}{hex(interface.read_reg(0x6001, 1)[2])}{RESET}")
+
+
+def configure_hi_rate_self_trigger(interface, ip, d0x3000, d0x6001, threshold):
+    """Configure high-rate self-trigger mode."""
+    GREEN = "\033[32m"
+    RESET = "\033[0m"
+
+    interface.write_reg(0x3000, [d0x3000 + ip * 0x400000])
+    print(f"Parameters: {GREEN}{hex(interface.read_reg(0x3000, 1)[2])}{RESET}")
+
+    interface.write_reg(0x3001, [0x3])
+    print(f"Data mode: {GREEN}{hex(interface.read_reg(0x3001, 1)[2])}{RESET}")
+
+    interface.write_reg(0x6000, [threshold])
+    print(f"Threshold: {GREEN}{interface.read_reg(0x6000, 1)[2]}{RESET}")
+
+    interface.write_reg(0x6001, [d0x6001])
+    print(f"Channels active: {GREEN}{hex(interface.read_reg(0x6001, 1)[2])}{RESET}")
+
+
+def configure_channels(interface, channels):
+    """Configure specific channels for endpoint 7."""
+    GREEN = "\033[32m"
+    RESET = "\033[0m"
+
+    # Convert channel list to 40-bit register value
+    register_value = sum(1 << ch for ch in channels)
+    interface.write_reg(0x1018, [register_value])
+    print(f"Channel configuration (0x1018): {GREEN}{bin(register_value)}{RESET}")
 
 
 if __name__ == "__main__":

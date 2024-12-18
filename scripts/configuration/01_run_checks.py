@@ -27,8 +27,8 @@ def run_checks(ip_address):
     if ip_address=="ALL": pass
     else:
         for ip in list(map(int, list(ip_address.split(",")))):
-            if ip not in [4,5,10,9,11,12,13,6]: 
-                print("\033[91mInvalid IP address, please choose your ip between 4,5,10,9,11,12,13,6 :)\033[0m"); 
+            if ip not in [4,5,10,9,11,12,13,7,6]: 
+                print("\033[91mInvalid IP address, please choose your ip between 4,5,10,9,11,12,13,7,6 :)\033[0m"); 
                 exit()
 
     # List of scripts to run

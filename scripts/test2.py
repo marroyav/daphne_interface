@@ -90,7 +90,7 @@ class FFTAnalysis:
 if __name__ == "__main__":
     # Read waveforms
     waveform_reader = ReadWaveforms(
-        ip="10.73.137.111",
+        ip="10.73.137.104",
         afe=4,
         ch=4,
         samples=1000,

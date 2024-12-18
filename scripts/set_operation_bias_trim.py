@@ -12,7 +12,7 @@ import json
 
 @click.command()
 @click.option("--map_location", '-map', default="./../maps/",help="Input file with channel operation bias and trim mapping")
-@click.option("--ip_address", '-ip', default="10.73.137.113",help="IP Address")
+@click.option("--ip_address", '-ip', default="10.73.137.107",help="IP Address")
 @click.option("--test", '-test', default=True,help="Whether the script prints the values or actually sets them")
 
 def main(map_location,ip_address,test):

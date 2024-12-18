@@ -9,17 +9,14 @@ import struct
 import unicodedata
 import signal
 import logging
-from concurrent.futures import ThreadPoolExecutor
+import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from functools import wraps, lru_cache
 import matplotlib.pyplot as plt
-from functools import lru_cache
-
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from functools import wraps
 
 
 def timeout_handler(func):
@@ -39,52 +36,67 @@ def timeout_handler(func):
     return wrapper
 
 
-def signal_handler(signum, frame):
-    raise TimeoutError("Operation timed out. Check device connection or command validity.")
-
-
-# def timeout_handler(func):
-#     def wrapper(*args, **kwargs):
-#         signal.signal(signal.SIGALRM, signal_handler)
-#         signal.alarm(1)
-#         try:
-#             result = func(*args, **kwargs)
-#         finally:
-#             signal.alarm(0)
-#         return result
-#     return wrapper
-
-
 class Daphne:
     def __init__(self, ipaddr, port=2001):
+        self.ipaddr = ipaddr
+        self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.target = (ipaddr, port)
+
+    def reset_socket(self):
+        """
+        Resets the socket connection to ensure a clean state.
+        """
+        logger.info("Resetting socket connection...")
+        self.sock.close()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.target = (self.ipaddr, self.port)
 
     @timeout_handler
     def read_reg(self, addr, size):
         cmd = struct.pack("BB", 0x00, size) + struct.pack("Q", addr)
-        self.sock.sendto(cmd, self.target)
-        d, _ = self.sock.recvfrom(2 + (8 * size))
-        return struct.unpack(f"<BB{size}Q", d)
+        try:
+            self.sock.sendto(cmd, self.target)
+            d, _ = self.sock.recvfrom(2 + (8 * size))
+            return struct.unpack(f"<BB{size}Q", d)
+        except Exception as e:
+            logger.error(f"Error reading register: {e}")
+            self.reset_socket()  # Reset socket in case of failure
+            raise e
 
     @timeout_handler
     def write_reg(self, addr, data):
         cmd = struct.pack("BB", 1, len(data)) + struct.pack("Q", addr)
         cmd += b"".join(struct.pack("Q", i) for i in data)
-        self.sock.sendto(cmd, self.target)
+        try:
+            self.sock.sendto(cmd, self.target)
+        except Exception as e:
+            logger.error(f"Error writing register: {e}")
+            self.reset_socket()  # Reset socket in case of failure
+            raise e
 
     @timeout_handler
     def read_fifo(self, addr, size):
         cmd = struct.pack("BB", 0x08, size) + struct.pack("Q", addr)
-        self.sock.sendto(cmd, self.target)
-        d, _ = self.sock.recvfrom(2 + (8 * size))
-        return struct.unpack(f"<BB{size}Q", d)
+        try:
+            self.sock.sendto(cmd, self.target)
+            d, _ = self.sock.recvfrom(2 + (8 * size))
+            return struct.unpack(f"<BB{size}Q", d)
+        except Exception as e:
+            logger.error(f"Error reading FIFO: {e}")
+            self.reset_socket()  # Reset socket in case of failure
+            raise e
 
     @timeout_handler
     def write_fifo(self, addr, data):
         cmd = struct.pack("BB", 0x09, len(data)) + struct.pack("Q", addr)
         cmd += b"".join(struct.pack("Q", i) for i in data)
-        self.sock.sendto(cmd, self.target)
+        try:
+            self.sock.sendto(cmd, self.target)
+        except Exception as e:
+            logger.error(f"Error writing FIFO: {e}")
+            self.reset_socket()  # Reset socket in case of failure
+            raise e
 
     def close(self):
         self.sock.close()
@@ -95,6 +107,20 @@ class Daphne:
         for i in range(0, len(cmd_bytes), 50):
             self.write_fifo(0x90000000, cmd_bytes[i:i + 50])
         return self.get_response_data()
+        # def command(self, cmd_string):
+        #     """
+        #     Sends a command to the hardware and returns the response data.
+        #     Temporarily modified to print all received data for debugging.
+        #     """
+        #     cmd_bytes = [ord(ch) for ch in cmd_string] + [0x0D]
+        #     for i in range(0, len(cmd_bytes), 50):
+        #         self.write_fifo(0x90000000, cmd_bytes[i:i + 50])
+            
+        #     # Collect and print raw response data
+        #     response = self.get_response_data()
+        #     print("Raw Response:", response)  # Print raw response for analysis
+        #     logger.info(f"Raw Response: {response}")  # Log it as well
+        #     return response
 
     def get_response_data(self):
         response = []
@@ -114,28 +140,79 @@ class Daphne:
 
         return self.remove_control_characters("".join(response))
 
-    def read_current(self, ch=0, iterations=3):
-        for _ in range(50):
+    def read_current(self, ch=0, iterations=3, max_retries=5):
+        """
+        Reads the current for a specific channel using regular expressions for parsing.
+        Args:
+            ch (int): Channel number.
+            iterations (int): Number of readings to average.
+            max_retries (int): Maximum number of retries before failing.
+        Returns:
+            float: Mean current value across iterations.
+        Raises:
+            RuntimeError: If no valid reading is obtained after retries.
+        """
+        current_pattern = re.compile(rf"CM CH = {ch} Voltage\(mV\)=\s*([\d.]+)")
+
+        for attempt in range(max_retries):  # Retry up to max_retries times
             try:
-                currents = [
-                    float(self.command(f"RD CM CH {ch}").split("(mV)= ")[1][:8])
-                    for _ in range(iterations)
-                ]
-                return mean(currents)
-            except Exception:
-                sleep(0.1)  # Backoff on failure
+                logger.info(f"Attempt {attempt + 1}: Reading current for channel {ch}...")
+                currents = []
+                for _ in range(iterations):
+                    response = self.command(f"RD CM CH {ch}")
+                    logger.info(f"Response: {response}")
+
+                    # Use regex to find the current value
+                    matches = current_pattern.findall(response)
+                    if matches:
+                        for match in matches:
+                            current_value = float(match)
+                            currents.append(current_value)
+                            logger.info(f"Parsed current value: {current_value} mA")
+
+                # If valid currents are collected, return their mean
+                if currents:
+                    logger.info(f"Collected currents: {currents}")
+                    return mean(currents)
+
+            except Exception as e:
+                logger.warning(f"Failed to read current on attempt {attempt + 1}: {e}")
+                self.reset_socket()  # Reset the socket if an error occurs
+                sleep(0.5)  # Add a short delay before retrying
+
         self.close()
-        raise RuntimeError("Failed to read current after multiple attempts")
+        raise RuntimeError(f"Failed to read current for channel {ch} after {max_retries} attempts")
 
     def read_bias(self):
-        info = self.command("RD VM ALL")
-        return [float(info.split(f"VBIAS{i}=")[1][:6]) for i in range(5)]
+        """
+        Reads all variables from the response and returns them as a dictionary.
+        Returns:
+            dict: Dictionary of all variables and their corresponding values.
+        Raises:
+            ValueError: If no valid variables are found in the response.
+        """
+        # Send the command and get the response
+        response = self.command("RD VM ALL")
+        logger.info(f"Response: {response}")
+
+        # Regex to extract all key-value pairs
+        variable_pattern = re.compile(r"([A-Za-z0-9_+\-]+)=\s*([\d.\-]+)")
+        matches = variable_pattern.findall(response)
+
+        if matches:
+            # Convert matches to a dictionary
+            variables = {key: float(value) for key, value in matches}
+            logger.info(f"Extracted variables: {variables}")
+            return variables
+
+        # Raise an error if no valid matches are found
+        raise ValueError("Failed to extract variables from response.")
 
     @staticmethod
     def remove_control_characters(s):
         return "".join(ch for ch in s if unicodedata.category(ch)[0] != "C")
 
-    def read_waveform(self, afe, ch, samples=1000, plot=False):
+    def read_waveform(self, afe, ch, samples=1000, plot=False, save_path=None):
         """
         Reads waveforms from a specific AFE and channel on the device.
         """
@@ -155,11 +232,11 @@ class Daphne:
             logger.warning(f"Empty or zero waveform for AFE {afe}, Channel {ch}.")
 
         if plot:
-            self._plot_waveform(wf, afe, ch)
+            self._plot_waveform(wf, afe, ch, save_path)
 
         return wf
 
-    def _plot_waveform(self, wf, afe, ch):
+    def _plot_waveform(self, wf, afe, ch, save_path=None):
         time_axis = np.linspace(0.0, len(wf) * 16e-9, num=len(wf))
         plt.figure(figsize=(10, 5))
         plt.plot(time_axis, wf, linewidth=0.6, label=f"AFE {afe} CH {ch}")
@@ -168,10 +245,15 @@ class Daphne:
         plt.title(f"Waveform for AFE {afe}, Channel {ch}")
         plt.legend()
         plt.grid()
-        plt.show()
+
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            logger.info(f"Waveform plot saved to {save_path}")
+        else:
+            plt.show()
 
     @staticmethod
-    def compute_fft(signal, dt=16e-9, plot=False):
+    def compute_fft(signal, dt=16e-9, plot=False, save_path=None):
         """
         Computes and optionally plots the FFT of a signal.
         """
@@ -194,12 +276,17 @@ class Daphne:
             plt.ylim([-140, -80])
             plt.xscale("log")
             plt.grid()
-            plt.show()
+
+            if save_path:
+                plt.savefig(save_path, dpi=300)
+                logger.info(f"FFT plot saved to {save_path}")
+            else:
+                plt.show()
 
         return x, y
 
     @staticmethod
-    def compute_mean_fft(waveforms, label, plot=False):
+    def compute_mean_fft(waveforms, label, plot=False, save_path=None):
         """
         Computes and optionally plots the mean FFT of multiple waveforms.
         """
@@ -233,11 +320,17 @@ class Daphne:
             plt.title("Mean FFT Analysis")
             plt.legend()
             plt.tight_layout()
-            plt.show()
+
+            if save_path:
+                plt.savefig(save_path, dpi=300)
+                logger.info(f"Mean FFT plot saved to {save_path}")
+            else:
+                plt.show()
 
         return mean_x, mean_y, mean_rms
 
-    def compute_fft_for_channels(self, afe, channels, samples=1000, dt=16e-9, plot=False):
+    
+    def compute_fft_for_channels(self, afe, channels, samples=1000, dt=16e-9, plot=False, save_path=None):
         """
         Computes FFTs for multiple channels and optionally plots them.
         """
@@ -253,11 +346,11 @@ class Daphne:
                 logger.warning(f"No valid data for channel {ch}. Skipping.")
 
         if plot:
-            self._plot_ffts_for_channels(fft_results, afe)
+            self._plot_ffts_for_channels(fft_results, afe, save_path)
 
         return fft_results
 
-    def _plot_ffts_for_channels(self, fft_results, afe):
+    def _plot_ffts_for_channels(self, fft_results, afe, save_path=None):
         plt.figure(figsize=(12, 8))
         for ch, (x, y) in fft_results.items():
             plt.plot(x, y, label=f"AFE {afe} CH {ch}")
@@ -269,78 +362,23 @@ class Daphne:
         plt.grid()
         plt.legend(loc="upper right", fontsize="small")
         plt.tight_layout()
-        plt.show()
 
-    def compute_mean_fft_for_channels(self, afe, channels, samples=1000, repeats=20, dt=16e-9, plot=False):
-        """
-        Computes the mean FFT across multiple waveforms for a collection of channels.
-        """
-        mean_fft_results = {}
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            logger.info(f"FFT plots for channels saved to {save_path}")
+        else:
+            plt.show()
 
-        def process_channel(ch):
-            waveforms = []
-            for _ in range(repeats):
-                wf = self.read_waveform(afe, ch, samples)
-                if wf.any():
-                    waveforms.append(wf)
-            if waveforms:
-                return ch, self._compute_mean_fft_from_waveforms(waveforms, dt)
-            logger.warning(f"No valid waveforms collected for Channel {ch}. Skipping.")
-            return ch, None
-
-        with ThreadPoolExecutor() as executor:
-            results = executor.map(process_channel, channels)
-
-        for ch, result in results:
-            if result:
-                mean_fft_results[ch] = result
-
-        if plot:
-            self._plot_mean_ffts_for_channels(mean_fft_results, afe)
-
-        return mean_fft_results
-
-    def _compute_mean_fft_from_waveforms(self, waveforms, dt):
-        fft_x = []
-        fft_y = []
-        rms_list = []
-
-        for wf in waveforms:
-            x, y = self.compute_fft(wf, dt=dt)
-            fft_x.append(x)
-            fft_y.append(y)
-            rms_list.append(std(wf))
-
-        mean_x = np.mean(fft_x, axis=0)
-        mean_y = np.mean(fft_y, axis=0)
-        mean_rms = np.round(np.mean(rms_list), 3)
-
-        return mean_x, mean_y, mean_rms
-
-    def _plot_mean_ffts_for_channels(self, mean_fft_results, afe):
-        plt.figure(figsize=(12, 8))
-        for ch, (x, y, rms) in mean_fft_results.items():
-            plt.plot(x, y, label=f"AFE {afe} CH {ch} RMS={rms}")
-        plt.xlabel("Frequency (MHz)")
-        plt.ylabel("Magnitude (dBFS)")
-        plt.title("Mean FFT Analysis for Multiple Channels")
-        plt.ylim([-140, -80])
-        plt.xscale("log")
-        plt.grid()
-        plt.legend(loc="upper right", fontsize="small")
-        plt.tight_layout()
-        plt.show()
-    
     @staticmethod
-    def compare_ffts_across_ips_and_channels(ips, afe, channels, samples=1000, dt=16e-9, repeats=20, plot=True):
+    def compare_ffts_across_ips_and_channels(ips, afe, channels, samples=1000, dt=16e-9, repeats=20, plot=True, save_path=None):
         """
         Compares the mean FFTs for multiple channels across multiple IP addresses.
         """
         fft_results = {}
 
         for ip in ips:
-            print(f"Processing IP: {ip}")
-            device = Daphne(ip)  # Instantiate a new Daphne object for each IP
+            logger.info(f"Processing IP: {ip}")
+            device = Daphne(ip)
 
             ip_results = {}
             for ch in channels:
@@ -350,23 +388,23 @@ class Daphne:
                     if wf.any():
                         waveforms.append(wf)
                     else:
-                        print(f"Warning: Empty waveform for IP {ip}, AFE {afe}, CH {ch}")
+                        logger.warning(f"Empty waveform for IP {ip}, AFE {afe}, CH {ch}")
 
                 if waveforms:
                     x, y, rms = device.compute_mean_fft(waveforms, label=f"IP {ip} CH {ch}")
                     ip_results[ch] = (x, y, rms)
                 else:
-                    print(f"No valid waveforms collected for IP {ip}, CH {ch}.")
+                    logger.warning(f"No valid waveforms collected for IP {ip}, CH {ch}")
 
             fft_results[ip] = ip_results
 
         if plot:
-            Daphne._plot_ffts_across_ips_and_channels(fft_results, afe)
+            Daphne._plot_ffts_across_ips_and_channels(fft_results, afe, save_path)
 
         return fft_results
 
     @staticmethod
-    def _plot_ffts_across_ips_and_channels(fft_results, afe):
+    def _plot_ffts_across_ips_and_channels(fft_results, afe, save_path=None):
         """
         Plots FFT comparisons for multiple IP addresses and channels.
         """
@@ -382,4 +420,101 @@ class Daphne:
         plt.grid()
         plt.legend(loc="upper right", fontsize="small")
         plt.tight_layout()
-        plt.show()
+
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            logger.info(f"FFT comparison plot saved to {save_path}")
+        else:
+            plt.show()
+    
+    def _compute_mean_fft_from_waveforms(self, waveforms, dt):
+        """
+        Computes the mean FFT from multiple waveforms.
+        Args:
+            waveforms (list of np.ndarray): List of waveforms.
+            dt (float): Time interval between samples.
+        Returns:
+            tuple: Mean FFT (x, y) and RMS value of the waveforms.
+        """
+        fft_x = []
+        fft_y = []
+        rms_list = []
+
+        for wf in waveforms:
+            x, y = self.compute_fft(wf, dt=dt)
+            fft_x.append(x)
+            fft_y.append(y)
+            rms_list.append(std(wf))
+
+        # Compute mean FFT and RMS
+        mean_x = np.mean(fft_x, axis=0)
+        mean_y = np.mean(fft_y, axis=0)
+        mean_rms = np.round(np.mean(rms_list), 3)
+
+        return mean_x, mean_y, mean_rms
+
+    def _plot_mean_ffts_for_channels(self, mean_fft_results, afe, save_path=None):
+        """
+        Plots the mean FFT for multiple channels.
+        Args:
+            mean_fft_results (dict): Dictionary with channel numbers as keys and FFT results (x, y, rms) as values.
+            afe (int): AFE number.
+            save_path (str): Path to save the plot. If None, displays the plot.
+        """
+        plt.figure(figsize=(12, 8))
+        for ch, (x, y, rms) in mean_fft_results.items():
+            plt.plot(x, y, label=f"AFE {afe} CH {ch} RMS={rms}")
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Magnitude (dBFS)")
+        plt.title("Mean FFT Analysis for Multiple Channels")
+        plt.ylim([-140, -80])
+        plt.xscale("log")
+        plt.grid()
+        plt.legend(loc="upper right", fontsize="small")
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            logger.info(f"Mean FFT plots saved to {save_path}")
+        else:
+            plt.show()
+
+    def compute_mean_fft_for_channels(self, afe, channels, samples=1000, repeats=20, dt=16e-9, plot=False, save_path=None):
+        """
+        Computes the mean FFT across multiple waveforms for a collection of channels.
+        Args:
+            afe (int): AFE number.
+            channels (list of int): List of channels to analyze.
+            samples (int): Number of samples per waveform.
+            repeats (int): Number of waveforms to collect per channel.
+            dt (float): Time interval between samples.
+            plot (bool): Whether to plot the mean FFTs for all channels.
+            save_path (str): Path to save the plot. If None, displays the plot.
+        Returns:
+            dict: Dictionary with channel numbers as keys and mean FFT results (x, y, rms) as values.
+        """
+        mean_fft_results = {}
+
+        def process_channel(ch):
+            waveforms = []
+            for _ in range(repeats):
+                wf = self.read_waveform(afe, ch, samples)
+                if wf.any():
+                    waveforms.append(wf)
+            if waveforms:
+                return ch, self._compute_mean_fft_from_waveforms(waveforms, dt)
+            logger.warning(f"No valid waveforms collected for Channel {ch}. Skipping.")
+            return ch, None
+
+        # Use ThreadPoolExecutor to process channels in parallel
+        with ThreadPoolExecutor() as executor:
+            results = executor.map(process_channel, channels)
+
+        for ch, result in results:
+            if result:
+                mean_fft_results[ch] = result
+
+        if plot:
+            self._plot_mean_ffts_for_channels(mean_fft_results, afe, save_path)
+
+        return mean_fft_results

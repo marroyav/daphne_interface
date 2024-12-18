@@ -1,112 +1,110 @@
-import ivtools, click
+import click
+from ivtools import Daphne
 
 @click.command()
-@click.option("--ip_address", '-ip', default='ALL',help="IP Address")
+@click.option("--ip_address", '-ip', default='ALL', help="Last digits of the IP address (comma-separated) or 'ALL'")
 def main(ip_address):
-    '''
-    Verify the clocks and timing endpoint is in a good state (registers 0x4000, 0x4002, 0x4003)
-    This script checks the status of the yellow fiber connecting to the timing interface.
-    We expect a "Good to go!" message, if not we should run: source setup_timing.sh (from np04daq@np04-srv-024 daphne/config/ folder)
-    
-    Args: 
-        - ip_address (default='ALL'): if no argument given it runs over all endpoints.
-    
-    Example: python conf_analog.py (-ip 4,5)
-    '''
+    """
+    Verify the clocks and timing endpoint for DAPHNE devices.
+
+    Args:
+        - ip_address (default='ALL'): If 'ALL', runs on all predefined IPs.
+                                     If digits, runs only on those endpoints.
+
+    Example:
+        python verify_clocks.py --ip_address 4,5
+        python verify_clocks.py --ip_address ALL
+    """
     RED = "\033[31m"
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
     RESET = "\033[0m"
 
     print(f"\033[35mExpecting: The same firmware version and a Good to go!!! message for all endpoints\033[0m")
 
-    if ip_address=="ALL": your_ips = [4,5,10,9,11,12,13,6]
-    else: your_ips = your_ips = list(map(int, list(ip_address.split(","))))
-    for ip in your_ips:
-        if ip not in [4,5,10,9,11,12,13,6]: 
-            print("\033[91mInvalid IP address, please choose your ip between 4,5,10,9,11,12,13,6:)\033[0m"); 
-            exit()
-        ip = f"10.73.137.{100+ip}"
-        interface = ivtools.daphne(ip)
+    # Predefined valid IPs
+    valid_ips = [4, 5, 10, 9, 11, 12, 13, 7, 6]
+
+    # Process input argument
+    if ip_address.upper() == "ALL":
+        selected_ips = valid_ips
+    else:
+        try:
+            selected_ips = list(map(int, ip_address.split(",")))
+        except ValueError:
+            print(f"{RED}Invalid IP address input. Use 'ALL' or comma-separated numbers.{RESET}")
+            return
+
+    # Validate selected IPs
+    invalid_ips = [ip for ip in selected_ips if ip not in valid_ips]
+    if invalid_ips:
+        print(f"{RED}Invalid IP(s) detected: {invalid_ips}. Valid options are: {valid_ips}.{RESET}")
+        return
+
+    # Verify clocks and timing endpoints for each selected IP
+    for ip in selected_ips:
+        full_ip = f"10.73.137.{100 + ip}"
         print(f"\n--------------------------------------")
-        print(f"--------------------------------------")
-        print(f"DAPHNE ip address {ip}")
-        print(f"DAPHNE firmware version\t{YELLOW}{interface.read_reg(0x9000,1)[2]:08x}{RESET}")
-        print(f"test resgisters\t\t{interface.read_reg(0xaa55,1)[2]:08x}")
-        print(f"endpoint address\t{interface.read_reg(0x4001,1)[2]:08x}")
-        print(f"register 5001\t\t{interface.read_reg(0x5001,1)[2]:08x}")
-        print(f"register 3000\t\t{interface.read_reg(0x3000,1)[2]:08x}")
+        print(f"Checking DAPHNE device at {full_ip}")
 
-        epstat = interface.read_reg(0x4000,1)[2] # read_reg the timing endpoint and master cl    ock status register
+        try:
+            # Initialize Daphne instance
+            interface = Daphne(full_ip)
 
-        if (epstat & 0x00000001):
-                print(f"{GREEN}MMCM0 is LOCKED OK{RESET}")
-        else:
-                print(f"{YELLOW}Warning! MMCM0 is UNLOCKED, need a hard reset!{RESET}")
+            # Read firmware version
+            firmware_version = interface.read_reg(0x9000, 1)[2]
+            print(f"DAPHNE firmware version\t{YELLOW}{firmware_version:08x}{RESET}")
 
-        if (epstat & 0x00000002):
-                print(f"{GREEN}Master clock MMCM1 is LOCKED OK{RESET}")
-        else:
-                print(f"{YELLOW}Warning! Master clock MMCM1 is UNLOCKED!{RESET}")
+            # Read and display register values
+            registers = {
+                "test_registers": interface.read_reg(0xaa55, 1)[2],
+                "endpoint_address": interface.read_reg(0x4001, 1)[2],
+                "register_5001": interface.read_reg(0x5001, 1)[2],
+                "register_3000": interface.read_reg(0x3000, 1)[2],
+            }
+            for reg, value in registers.items():
+                print(f"{reg.replace('_', ' ')}\t{value:08x}")
 
-        if (epstat & 0x00000010):
-                print(f"{YELLOW}Warning! CDR chip loss of signal (LOS=1){RESET}")
-        else:
-                print(f"{GREEN}CDR chip signal OK (LOS=0){RESET}")
+            # Read endpoint status
+            epstat = interface.read_reg(0x4000, 1)[2]
 
-        if (epstat & 0x00000020):
-                print(f"{YELLOW}Warning! CDR chip UNLOCKED (LOL=1){RESET}")
-        else:
-                print(f"{GREEN}CDR chip LOCKED (LOL=0) OK{RESET}")
+            # Interpret MMCM and clock status
+            mmcm_status = [
+                ("MMCM0 LOCKED", epstat & 0x00000001),
+                ("Master clock MMCM1 LOCKED", epstat & 0x00000002),
+                ("CDR chip signal OK (LOS=0)", not (epstat & 0x00000010)),
+                ("CDR chip LOCKED (LOL=0)", not (epstat & 0x00000020)),
+                ("Timing SFP module optical signal OK (LOS=0)", not (epstat & 0x00000040)),
+                ("Timing SFP module is present", not (epstat & 0x00000080)),
+                ("Timing endpoint timestamp valid", epstat & 0x00001000),
+            ]
+            for name, status in mmcm_status:
+                color = GREEN if status else YELLOW
+                print(f"{color}{name} {RESET if status else 'Warning!'}")
 
-        if (epstat & 0x00000040):
-                print(f"{YELLOW}Warning! Timing SFP module optical loss of signal (LOS=1){RESET}"    )
-        else:
-                print(f"{GREEN}Timing SFP module optical signal OK (LOS=0){RESET}")
+            # Interpret endpoint state
+            ep_state = (epstat & 0xF00) >> 8
+            state_messages = {
+                0: f"{RED}Starting state after reset{RESET}",
+                1: f"{RED}Waiting for SFP LOS to go low{RESET}",
+                2: f"{RED}Waiting for good frequency check{RESET}",
+                3: f"{RED}Waiting for phase adjustment to complete{RESET}",
+                4: f"{RED}Waiting for comma alignment, stable 62.5MHz phase{RESET}",
+                5: f"{RED}Waiting for 8b10 decoder good packet{RESET}",
+                6: f"{RED}Waiting for phase adjustment command{RESET}",
+                7: f"{RED}Waiting for time stamp initialization{RESET}",
+                8: f"{GREEN}Good to go!!!{RESET}",
+                12: f"{RED}Error in rx{RESET}",
+                13: f"{RED}Error in time stamp check{RESET}",
+                14: f"{RED}Physical layer error after lock{RESET}",
+            }
+            print(state_messages.get(ep_state, f"{YELLOW}Warning! Undefined state {ep_state}.{RESET}"))
 
-        if (epstat & 0x00000080):
-                print(f"{YELLOW}Warning! Timing SFP module NOT DETECTED!{RESET}")
-        else:
-                print(f"{GREEN}Timing SFP module is present OK{RESET}")
+            # Close the interface
+            interface.close()
 
-        if (epstat & 0x00001000):
-                print(f"{GREEN}Timing endpoint timestamp is valid{RESET}")
-        else:
-                print(f"{YELLOW}Warning! Timing endpoint timestamp is NOT valid{RESET}")
-        ep_state = (epstat & 0xF00) >> 8  # timing endpoint state bits
-
-        if ep_state==0:
-                print(f"{RED}Endpoint State = 0 : Starting state after reset{RESET}")
-        elif ep_state==1:
-                print(f"{RED}Endpoint State = 1 : Waiting for SFP LOS to go low{RESET}")
-        elif ep_state==2:
-                print(f"{RED}Endpoint State = 2 : Waiting for good frequency check{RESET}")
-        elif ep_state==3:
-                print(f"{RED}Endpoint State = 3 : Waiting for phase adjustment to complete{RESET}")
-        elif ep_state==4:
-                print(f"{RED}Endpoint State = 4 : Waiting for comma alignment, stable 62.5MHz phase{RESET}")
-        elif ep_state==5:
-                print(f"{RED}Endpoint State = 5 : Waiting for 8b10 decoder good packet{RESET}")
-        elif ep_state==6:
-                print(f"{RED}Endpoint State = 6 : Waiting for phase adjustment command{RESET}")
-        elif ep_state==7:
-                print(f"{RED}Endpoint State = 7 : Waiting for time stamp initialization{RESET}")
-        elif ep_state==8:
-                print(f"{GREEN}Endpoint State = 8 : Good to go!!!{RESET}")
-        elif ep_state==12:
-                print(f"{RED}Endpoint State = 12 : Error in rx{RESET}")
-        elif ep_state==13:
-                print(f"{RED}Endpoint State = 13 : Error in time stamp check{RESET}")
-        elif ep_state==14:
-                print(f"{RED}Endpoint State = 14 : Physical layer error after lock{RESET}")
-        else:
-                print(f"{YELLOW}Endpoint State = {ep_state} : warning! undefined state!{RESET}")
-
-        interface.close()
-
+        except Exception as e:
+            print(f"{RED}Error while processing IP {full_ip}: {e}{RESET}")
 
 if __name__ == "__main__":
     main()
