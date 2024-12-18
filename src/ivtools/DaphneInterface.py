@@ -10,6 +10,7 @@ import unicodedata
 import signal
 import logging
 import re
+from numpy import mean
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from functools import wraps, lru_cache
 import matplotlib.pyplot as plt
@@ -135,12 +136,12 @@ class Daphne:
                     response.append(f"[{['START', 'RESULT', 'END'][b - 1]}]")
                 elif chr(b).isprintable():
                     response.append(chr(b))
-            sleep(0.002)
+            sleep(0.005)
             retry_count -= 1
 
         return self.remove_control_characters("".join(response))
 
-    def read_current(self, ch=0, iterations=3, max_retries=5):
+    def read_current(self, ch=0, iterations=3, max_retries=50):
         """
         Reads the current for a specific channel using regular expressions for parsing.
         Args:
@@ -152,15 +153,20 @@ class Daphne:
         Raises:
             RuntimeError: If no valid reading is obtained after retries.
         """
-        current_pattern = re.compile(rf"CM CH = {ch} Voltage\(mV\)=\s*([\d.]+)")
+       
 
-        for attempt in range(max_retries):  # Retry up to max_retries times
+        # Regex pattern to match the voltage value in the response
+        current_pattern = re.compile(rf"CM CH = {ch} Voltage\(mV\)=\s*([-+]?\d*\.\d+|\d+)")
+
+        # Retry mechanism
+        for attempt in range(max_retries):
             try:
-                logger.info(f"Attempt {attempt + 1}: Reading current for channel {ch}...")
+                # logger.info(f"Attempt {attempt + 1}: Reading current for channel {ch}...")
                 currents = []
                 for _ in range(iterations):
+                    # Send the command and get the response
                     response = self.command(f"RD CM CH {ch}")
-                    logger.info(f"Response: {response}")
+                    # logger.info(f"Response: {response}")
 
                     # Use regex to find the current value
                     matches = current_pattern.findall(response)
@@ -168,20 +174,34 @@ class Daphne:
                         for match in matches:
                             current_value = float(match)
                             currents.append(current_value)
-                            logger.info(f"Parsed current value: {current_value} mA")
+                            # logger.info(f"Parsed current value: {current_value} mA")
 
                 # If valid currents are collected, return their mean
                 if currents:
-                    logger.info(f"Collected currents: {currents}")
+                    # logger.info(f"Collected currents: {currents}")
                     return mean(currents)
 
             except Exception as e:
                 logger.warning(f"Failed to read current on attempt {attempt + 1}: {e}")
                 self.reset_socket()  # Reset the socket if an error occurs
-                sleep(0.5)  # Add a short delay before retrying
 
+        # If retries are exhausted, close the connection and raise an error
         self.close()
         raise RuntimeError(f"Failed to read current for channel {ch} after {max_retries} attempts")
+
+    def read_current_dep(self, ch=0,iterations=3):
+        self.current = None
+        counter=0
+        while self.current is None and counter<50:
+            try:
+                self.current = [float(self.command(f'RD CM CH {ch}').split("(mV)= ")[1][:8]) for i in range (iterations)]
+                counter+=1
+            except:
+                if counter>=50:
+                    self.close()
+                else:
+                    pass
+        return mean(self.current)
 
     def read_bias(self):
         """
