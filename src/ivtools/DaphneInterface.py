@@ -195,8 +195,9 @@ class Daphne:
         response = self.command("RD VM ALL")
         logger.info(f"Response: {response}")
 
-        # Regex to extract all key-value pairs
-        variable_pattern = re.compile(r"([A-Za-z0-9_+\-]+)=\s*([\d.\-]+)")
+        # Regex to extract all key-value pairs, including POWER and TEMP
+        # Enhanced regex pattern to ensure all expected variables are captured
+        variable_pattern = re.compile(r"(VBIAS[0-4]|POWER\([-+a-zA-Z0-9.]+\)|TEMP\([a-zA-Z]+\))=\s*([\d.\-]+)")  
         matches = variable_pattern.findall(response)
 
         if matches:
