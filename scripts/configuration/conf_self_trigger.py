@@ -23,7 +23,7 @@ def main(ip_address):
     print(f"{GREEN}Configuring self-trigger module for selected DAPHNE endpoints.{RESET}")
 
     # Predefined valid IPs
-    valid_ips = [4, 9, 11, 12, 13, 6]
+    valid_ips = [4,7, 9, 11, 12, 13, 6]
 
     # Process input argument
     if ip_address.upper() == "ALL":
@@ -60,9 +60,9 @@ def main(ip_address):
 
             # Uncomment the following lines to write configurations if needed
             # Configure self-trigger
-            # interface.write_reg(0x6100, [0x020010000064])  # Self-trigger ~1.5pe 450adu xcorr
-            # interface.write_reg(0x6002, [0xF137])         # Configure primitive module ~1.5pe
-            # interface.write_reg(0x6001, [0xFFFFFFFFFF])   # Enable self-trigger for all channels
+            interface.write_reg(0x6100, [0x20010000032])  # Self-trigger ~1.5pe 450adu xcorr
+            interface.write_reg(0x6002, [0xe935])         # Configure primitive module ~1.5pe
+            interface.write_reg(0x6001, [0xFFFFFFFFFF])   # Enable self-trigger for all channels
             # interface.write_reg(0x2023, [0x0])            # Selector for half of the channels on the APA
 
             # Readback configurations

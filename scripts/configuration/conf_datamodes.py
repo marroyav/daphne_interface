@@ -45,7 +45,7 @@ def main(ip_address):
     data_mode = {
         4: ["full_stream", 0x001081, 0xFFFF],
         5: ["full_stream", 0x001081, 0x5A0A5FF],
-        7: ["full_stream", 0x001081, 0xA9A5],  # Channels for endpoint 7
+        7: ["full_stream", 0x001081, 0x8040201FF],  # Channels for endpoint 7
         9: ["hi_rate_self_trigger", 0x001081, 0xFFFFFFFFFF],
         11: ["hi_rate_self_trigger", 0x002081, 0xFFFFFFFFFF],
         12: ["hi_rate_self_trigger", 0x002081, 0xA5FFFFFFFF],
@@ -78,8 +78,8 @@ def main(ip_address):
                 configure_hi_rate_self_trigger(interface, ip, d0x3000, d0x6001, threshold)
 
             # Special configuration for endpoint 7
-            if ip == 7:
-                configure_channels(interface, [0, 7, 8, 15, 16, 23, 24, 31, 32, 39])
+            #if ip == 7:
+            #    configure_channels(interface, [0, 7, 8, 15, 16, 23, 24, 31, 32,33,34,35,36,37,38,39])
 
             interface.close()
 

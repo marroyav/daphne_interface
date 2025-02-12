@@ -55,7 +55,7 @@ def main(ip_address):
             print(f"DAPHNE firmware version: {GREEN}{firmware_version:08X}{RESET}")
 
             # Configure timing and clocks
-            USE_ENDPOINT = 1
+            USE_ENDPOINT = 0
             interface.write_reg(0x4001, [USE_ENDPOINT])  # Master Clock and Timing Endpoint Control Register
             interface.write_reg(0x4003, [1234])          # Reset timing endpoint
             sleep(0.5)
@@ -66,8 +66,9 @@ def main(ip_address):
 
             # Read alignment and error counts
             alignment_status = interface.read_reg(0x2002, 1)[2]
+            mclk_state = interface.read_reg(0x4000,1)[2]
             print(f"AFE automatic alignment done, should read 0x1F: {GREEN}{alignment_status:02X}{RESET}")
-
+            print(f"MCLK state: {GREEN}{bin(mclk_state)[2:]}{RESET}")
             for afe in range(5):
                 error_count = interface.read_reg(0x2010 + afe, 1)[2]
                 if error_count == 0:
