@@ -1,0 +1,13 @@
+
+[project]
+name = "daphne-daq"
+version = "0.1.0"
+dependencies = ["typer[all]", "rich", "tqdm", "numpy", "matplotlib"]
+requires-python = ">=3.10"
+
+[project.scripts]
+daphne = "daphne_app.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

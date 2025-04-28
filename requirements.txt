@@ -1,6 +1,0 @@
-click
-numpy
-matplotlib
-tqdm
-uproot
-.
