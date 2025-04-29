@@ -1,0 +1,85 @@
+# -------------------------------------------------------------------
+# Global lists
+# -------------------------------------------------------------------
+
+# All endpoint “last-octet” numbers that exist in your lab rack.
+valid_ips: [4, 5, 6, 7, 9, 10, 11, 12, 13]
+
+# Sub-set that operate in full-stream mode (need the trigger matrix).
+full_stream_endpoints: [4, 5, 7]
+
+# -------------------------------------------------------------------
+# Per-endpoint data-mode configuration
+# -------------------------------------------------------------------
+# Keys are *strings* (“4”, “5”, …) because YAML always turns bare keys
+# into strings anyway.  Values may be decimal or `0x` hexadecimal.
+#
+#   mode        →  "full_stream"  |  "hi_rate_self_trigger"
+#   reg_3000    →  value of register 0x3000 (before adding ip*0x400000)
+#   reg_6001    →  40-bit channel-mask
+#
+# You can freely add new endpoints or tweak the masks/regs here.
+# -------------------------------------------------------------------
+
+data_modes:
+  "4":
+    mode:       full_stream
+    reg_3000:   0x001081
+    reg_6001:   0x0FFFF          # 16 channels active
+  "5":
+    mode:       full_stream
+    reg_3000:   0x001081
+    reg_6001:   0x5A0A5FF
+  "7":
+    mode:       full_stream
+    reg_3000:   0x001081
+    reg_6001:   0x8040201FF      # custom 40-bit mask
+  "9":
+    mode:       hi_rate_self_trigger
+    reg_3000:   0x001081
+    reg_6001:   0xFFFFFFFFFF     # all channels
+  "11":
+    mode:       hi_rate_self_trigger
+    reg_3000:   0x002081
+    reg_6001:   0xFFFFFFFFFF
+  "12":
+    mode:       hi_rate_self_trigger
+    reg_3000:   0x002081
+    reg_6001:   0xA5FFFFFFFF
+  "13":
+    mode:       hi_rate_self_trigger
+    reg_3000:   0x002081
+    reg_6001:   0xA5             # just two channels
+
+
+# ------------------------------------------------------------------
+# Self-trigger configuration (match-filter path)
+# ------------------------------------------------------------------
+self_trigger:
+  defaults:               # ← used for every endpoint unless overridden
+    mask_enable:    0xFFFFFFFFFF      # 40-bit channel mask
+    module_cfg:     0x0000C80         # slope=12 ADC, selector=01, ped=0 …
+    comp_enable:    0x0               # per-AFE compensator OFF
+    inv_enable:     0x0               # digital inverter OFF
+    adhoc_cmd:      7                 # ad-hoc trigger value
+    xc_thresh:      0x00000012C00FFFF # corr=300, discr=-80
+
+  endpoints:                # ↓ override anything per board suffix
+    "7":
+      # enable only first 16 channels and raise corr threshold
+      mask_enable: 0xFFFF
+      xc_thresh:   0x0000001F400FFFF  # corr thr = 500
+    "5":
+      comp_enable: 0xFFFFFFFFFF       # turn on all compensators
+
+
+mode_presets:
+  full_stream:
+    reg_3000: 0x001081
+    reg_6001: 0x000ffff
+  self_trigger:
+    reg_3000: 0x001081
+    reg_6001: 0x8040201ff
+  hi_rate_self_trigger:
+    reg_3000: 0x002081
+    reg_6001: 0xffffffffff

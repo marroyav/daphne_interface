@@ -1,0 +1,52 @@
+diff --git a/daphne_app/cli.py b/daphne_app/cli.py
+--- a/daphne_app/cli.py
++++ b/daphne_app/cli.py
+@@ -18,7 +18,8 @@
+ """
+ 
+-from typing import List
++from typing import List
++from pathlib import Path                  # NEW
+ 
+ import typer
+ from daphne_app.capture_workflows import plotly_view
+ from daphne_app.capture_workflows import live_plot
+@@ -34,6 +35,29 @@ from daphne_app.check_workflows  import self_trigger as self_trigger_check
+     counters,
+     analog_check,
+ )
+ from daphne_app.utils.settings import valid_ips
++
++# ───────────────────────────────────────────
++# CAPTURE group (new)
++# ───────────────────────────────────────────
++capture_app = typer.Typer(help="Data capture utilities")
++app.add_typer(capture_app, name="capture")
++
++
++# Plotly interactive waveform viewer
++@capture_app.command("plotly")
++def cap_plotly(
++    ip: str = typer.Option(..., "--ip", help="Endpoint suffix (e.g. 7)"),
++    afes: str = typer.Option("0,1,2,3,4", "--afes",
++                             help="Comma-separated AFE list"),
++    channels: str = typer.Option("0,7", "--channels",
++                                 help="Comma-separated channel list"),
++    samples: int = typer.Option(1000, "--samples",
++                                help="Samples per waveform"),
++    n: int = typer.Option(10, "--n", help="Waveforms per channel"),
++    html: str | None = typer.Option(None, "--html",
++                                    help="Optional HTML export"),
++):
++    """Capture spy-buffer waveforms and open an interactive Plotly window."""
++    afes_list = [int(x) for x in afes.split(",") if x]
++    chan_list = [int(x) for x in channels.split(",") if x]
++
++    plotly_view.view(
++        ip_suffix=int(ip),
++        afes=afes_list,
++        channels=chan_list,
++        samples=samples,
++        n_wf=n,
++        html_path=Path(html) if html else None,
++    )
