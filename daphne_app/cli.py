@@ -272,6 +272,10 @@ def cap_plotly(
     n_wf:    int = typer.Option(10,   "--n-wf",    help="# wave-forms / ch"),
     # ----- output --------------------------------------------------
     html: str = typer.Option("waveforms.html", "--html", help="Output HTML"),
+    save_wf: str | None = typer.Option(
+        None, "--save-wf",
+        help="Optional .npz / .npy / .pkl dump of raw wave-forms",
+    ),
 ) -> None:
     """
     Acquire spy-buffer wave-forms and build a polished interactive Plotly
@@ -296,6 +300,7 @@ def cap_plotly(
         samples          = samples,
         n_wf             = n_wf,
         html             = html,
+        save_wf          = save_wf,
     )
 
 
