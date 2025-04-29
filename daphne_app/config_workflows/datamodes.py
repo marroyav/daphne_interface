@@ -12,7 +12,7 @@ Typical use
 from collections.abc import Iterable
 from typing import Literal, Mapping
 
-import ivtools
+from daphne_app.hardware.daphne import Daphne
 from rich.console import Console
 from tqdm import tqdm
 
@@ -101,7 +101,7 @@ def configure(
 
     for suffix in ip_iter:
         full_ip = endpoint_ip(suffix)
-        dev = ivtools.Daphne(full_ip)
+        dev = Daphne(full_ip)
 
         mode = force_mode or data_mode(suffix)["mode"]
         reg_3000, reg_6001 = _mode_to_regs(mode)

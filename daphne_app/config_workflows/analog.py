@@ -16,8 +16,7 @@ from typing import Iterable, List
 
 import sys
 from pathlib import Path
-
-import ivtools
+from daphne_app.hardware.daphne import Daphne
 from rich.console import Console
 from tqdm import tqdm
 
@@ -86,7 +85,7 @@ def configure(
     # ── main loop per endpoint ───────────────────────────────────────
     for suffix in ips:
         full_ip = endpoint_ip(suffix)
-        dev = ivtools.Daphne(full_ip)
+        dev = Daphne(full_ip)
 
         # -- progress bar decision (avoids Daphne._tty look-up) ------
         if isinstance(progress, bool):

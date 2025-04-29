@@ -233,11 +233,12 @@ class Daphne:
     def remove_control_characters(s):
         return "".join(ch for ch in s if unicodedata.category(ch)[0] != "C")
 
-    def read_waveform(self, afe, ch, samples=1000, plot=False, save_path=None):
+    def read_waveform(self, afe, ch, samples=1000, plot=False, self_trigger=False, save_path=None):
         """
         Reads waveforms from a specific AFE and channel on the device.
         """
-        self.write_reg(0x2000, [1234])  # Trigger spy buffers
+        if self_trigger:
+            self.write_reg(0x2000, [1234])  # Trigger spy buffers
         wf = []
         try:
             base_addr = 0x40000000 + (0x100000 * afe) + (0x10000 * ch)

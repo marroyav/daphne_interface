@@ -1,151 +1,244 @@
-from __future__ import annotations
 """
-Plotly multi-AFE waveform viewer (interactive).
+Interactive Plotly visualisation of DAPHNE wave-forms.
 
-Invoked from the CLI – see cli.py integration below.
+Example
+-------
+channels_to_acquire = {
+    0: [0, 7],
+    1: [0, 7],
+    2: [0, 7],
+    3: [0, 7],
+    4: list(range(8)),
+}
+
+daphne capture plotly --ip 7 --afes 0,1,2,3,4 \
+                      --channels-file my_channels.py \
+                      --samples 1000 --n 50 --html wf.html
 """
+from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence, Dict, List
+from typing import Dict, List, Iterable
+import itertools
+import importlib.util
 import numpy as np
-from rich.console import Console
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ..hardware.daphne import Daphne
-from ..utils.colors import RED
+from daphne_app.hardware.daphne import Daphne
+from daphne_app.utils.ip_utils import endpoint_ip
 
-console = Console()
+# ─────────────── helpers  ──────────────────────────────────────────────────
+def _info_from_details(json_file: str) -> tuple[str, dict[int, list[int]]]:
+    """
+    Read *details.json* and return
+      full_ip  (e.g. "10.73.137.107")
+      channels_per_afe  {0: [0,7], 1: [0,7], …}
+    """
+    import json, ipaddress
 
-# ------------- helpers -------------------------------------------------
+    with open(json_file, "r") as f:
+        cfg = json.load(f)
+
+    dev = cfg["devices"][0]                # → extend if several boards
+    full_ip = str(ipaddress.ip_address(dev["ip"]))   # validates the address
+
+    indices = dev["channels"]["indices"]
+    mapping: dict[int, list[int]] = {}
+    for idx in indices:
+        afe, ch = divmod(idx, 8)
+        mapping.setdefault(afe, []).append(ch)
+    for lst in mapping.values():
+        lst.sort()
+
+    return full_ip, mapping
+# ─────────────── utilities ──────────────────────────────────────────────────
+def _rms(arr: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(arr.astype(float) ** 2)))
 
 
-def _endpoint_ip(suffix: int) -> str:
-    return f"10.73.137.{100 + suffix}"
+def _hex_to_rgba(hx: str, alpha: float) -> str:
+    hx = hx.lstrip("#")
+    r, g, b = (int(hx[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
 
 
-def _capture_all(
+def _colour_cycle(n: int) -> Iterable[str]:
+    default_hex = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        "#bcbd22", "#17becf",
+    ]
+    return itertools.islice(itertools.cycle(default_hex), n)
+
+
+# ─────────────── main routine ───────────────────────────────────────────────
+def view(
+    *,
     ip_suffix: int,
-    afes: Sequence[int],
-    channels_dict: Dict[int, Sequence[int]],
-    samples: int,
-    n_wf: int,
-) -> Dict[int, Dict[int, np.ndarray]]:
-    """
-    Returns nested dict {afe: {ch: np.ndarray[n_wf, samples]}}
-    """
-    ip = _endpoint_ip(ip_suffix)
-    dev = Daphne(ip)
-    base = 0x40000000
-    step_a = 0x100000
-    step_c = 0x10000
-
-    console.print(f"[cyan]Capturing from {ip}[/]")
-
-    all_data: Dict[int, Dict[int, np.ndarray]] = {}
-    for afe in afes:
-        chs = channels_dict[afe]
-        buf: Dict[int, List[np.ndarray]] = {ch: [] for ch in chs}
-
-        for _ in range(n_wf):
-            dev.write_reg(0x2020, [1234])   # start spy-buffer
-            dev.write_reg(0x2021, [1234])   # latch
-            for ch in chs:
-                addr = base + step_a * afe + step_c * ch
-                raw = dev.read_reg(addr, 50)      # 50 words per call
-                wf = np.array(raw[2:], dtype=np.uint16)
-                buf[ch].append(wf)
-
-        # stack & store
-        all_data[afe] = {ch: np.vstack(buf[ch]) for ch in chs}
-
-    dev.close()
-    return all_data
-
-
-def _plot(
-    data: Dict[int, Dict[int, np.ndarray]],
-    samples: int,
-    html_path: Path | None,
+    channels_per_afe: Dict[int, List[int]],
+    samples: int = 1000,
+    n_wf: int = 10,
+    html: str = "waveforms.html",
 ) -> None:
-    time_axis = np.linspace(0, samples * 16e-9, samples)
+    """
+    Acquire ``n_wf`` wave-forms for each (AFE, channel) entry in
+    *channels_per_afe* and write an interactive HTML file.
 
-    afes = list(data.keys())
-    n_sub = len(afes)
-    rows = (n_sub + 2) // 3
-    cols = min(n_sub, 3)
+    • first two rows – individual wave-forms (faint) & their mean ±1 σ band
+    • third row      – RMS statistics table
+    """
+    full_ip = endpoint_ip(ip_suffix)
+    dev = Daphne(full_ip)
+
+    afes = sorted(channels_per_afe.keys())
+    rows, cols = 3, 3
+    subplot_titles = [f"AFE {a}" for a in afes] + ["RMS statistics"]
 
     fig = make_subplots(
-        rows=rows, cols=cols,
-        subplot_titles=[f"AFE {a}" for a in afes],
-        vertical_spacing=0.13, horizontal_spacing=0.08,
+        rows=rows,
+        cols=cols,
+        subplot_titles=subplot_titles,
+        horizontal_spacing=0.05,
+        vertical_spacing=0.12,
+        specs=[
+            [{"type": "xy"}] * cols,
+            [{"type": "xy"}] * cols,
+            [{"type": "domain", "colspan": 3}, None, None],
+        ],
     )
 
-    subplot_idx = 0
-    colors = ['blue', 'orange', 'green', 'red',
-          'purple', 'brown', 'gray', 'olive']
-#  ──or──  px.colors.qualitative.Plotly
+    # one colour per channel (stable across AFEs)
+    uniq_ch = sorted({c for chs in channels_per_afe.values() for c in chs})
+    colour_map = {ch: col for ch, col in zip(uniq_ch, _colour_cycle(len(uniq_ch)))}
 
-    for afe in afes:
-        row = subplot_idx // cols + 1
-        col = subplot_idx % cols + 1
-        for color_idx, (ch, wfs) in enumerate(data[afe].items()):
-            for wf in wfs:
+    rms_stats = {}
+    dt = 16e-9  # 16 ns / sample
+
+    for idx, afe in enumerate(afes):
+        row = 1 if idx < cols else 2
+        col = (idx % cols) + 1
+
+        for ch in channels_per_afe[afe]:
+            wf_stack = []
+            colour = colour_map[ch]
+
+            # ── acquisition ───────────────────────────────────────────────
+            for _ in range(n_wf):
+                dev.write_reg(0x2020, [1234]); dev.write_reg(0x2021, [1234])
+                wf = dev.read_waveform(afe=afe, ch=ch, samples=samples)
+                wf_stack.append(wf)
+
+                # Each individual WF (faint)
+                t = np.arange(len(wf)) * dt * 1e6  # µs
                 fig.add_trace(
                     go.Scatter(
-                        x=time_axis, y=wf,
-                        mode="lines", showlegend=False,
-                        line=dict(width=1, color=colors[color_idx % len(colors)]),
+                        x=t, y=wf,
+                        mode="lines",
+                        line=dict(width=0.6, color=_hex_to_rgba(colour, 0.25)),
+                        hoverinfo="skip",
+                        showlegend=False,
                     ),
                     row=row, col=col,
                 )
-            # add one legend entry per channel
+
+            wf_stack = np.vstack(wf_stack)
+            mean_wf, std_wf = wf_stack.mean(axis=0), wf_stack.std(axis=0)
+            t = np.arange(len(mean_wf)) * dt * 1e6  # µs
+
+            # ±1 σ band
             fig.add_trace(
                 go.Scatter(
-                    x=[None], y=[None], name=f"CH {ch}",
+                    x=np.concatenate([t, t[::-1]]),
+                    y=np.concatenate([mean_wf + std_wf, (mean_wf - std_wf)[::-1]]),
                     mode="lines",
-                    line=dict(color=colors[color_idx % len(colors)]),
-                ), row=row, col=col,
+                    line=dict(width=0),
+                    fill="toself",
+                    fillcolor=_hex_to_rgba(colour, 0.20),
+                    hoverinfo="skip",
+                    showlegend=False,
+                ),
+                row=row, col=col,
             )
-        subplot_idx += 1
+            # mean WF (thicker)
+            fig.add_trace(
+                go.Scatter(
+                    x=t, y=mean_wf,
+                    mode="lines",
+                    line=dict(width=1.5, color=colour),
+                    name=f"CH {ch}",
+                    showlegend=False,         # ← hide legend
+                ),
+                row=row, col=col,
+            )
 
-    # axis labels
-    for c in range(1, cols + 1):
-        fig.update_xaxes(title_text="Time (s)", row=rows, col=c)
-    for r in range(1, rows + 1):
-        fig.update_yaxes(title_text="ADC", row=r, col=1)
+            rms_stats[f"AFE {afe} CH {ch}"] = round(_rms(wf_stack.ravel()), 2)
 
-    fig.update_layout(
-        height=400 * rows,
-        width=1200,
-        title="Waveforms from Daphne",
-        legend_title="Channels",
+    # ── RMS table ──────────────────────────────────────────────────────────
+    hdr, cells = zip(*sorted(rms_stats.items(), key=lambda kv: kv[0]))
+    fig.add_trace(
+        go.Table(
+            header=dict(
+                values=["Channel", "RMS [mV]"],
+                fill_color="lightgrey",
+                font=dict(size=13),
+                align="left",
+            ),
+            cells=dict(values=[hdr, cells], align="left", font=dict(size=12)),
+        ),
+        row=3, col=1,
     )
-    if html_path:
-        fig.write_html(html_path)
-        console.print(f"[green]HTML exported → {html_path}[/]")
-    fig.show()
+
+    # ── layout tweaks ──────────────────────────────────────────────────────
+    fig.update_xaxes(title="time [µs]", row=1, col=1)
+    fig.update_yaxes(title="ADC counts", row=1, col=1)
+    fig.update_layout(
+        height=900, width=1300,
+        template="simple_white",
+        margin=dict(l=65, r=35, t=80, b=55),
+        title=dict(
+            text=f"DAPHNE wave-forms  –  endpoint {full_ip}",
+            x=0.01, xanchor="left",
+        ),
+    )
+
+    out = Path(html).expanduser().resolve()
+    fig.write_html(out, include_mathjax="cdn")
+    print(f"🔬  Interactive figure written to {out}")
 
 
-# ------------- public entry -------------------------------------------
+# ────────────────────── helper to load channels dict from file ──────────────
+def _load_channels_dict(path: str) -> Dict[int, List[int]]:
+    """Import a ``channels_to_acquire`` dict from an arbitrary *.py* file."""
+    p = Path(path).expanduser().resolve()
+    spec = importlib.util.spec_from_file_location("ch_cfg", p)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(mod)                # type: ignore[union-attr]
+    return getattr(mod, "channels_to_acquire")
 
 
-def view(
-    ip_suffix: int,
-    afes: Sequence[int],
-    channels: Sequence[int],
-    samples: int,
-    n_wf: int,
-    html_path: Path | None,
-) -> None:
-    """
-    Capture & plot waveforms.
+# ──────────────────────────── CLI hook ──────────────────────────────────────
+if __name__ == "__main__":      # pragma: no cover
+    import argparse, importlib.util
 
-    channels is interpreted as the *same* list for every AFE.
-    """
-    ch_dict = {afe: channels for afe in afes}
-    try:
-        data = _capture_all(ip_suffix, afes, ch_dict, samples, n_wf)
-        _plot(data, samples, html_path)
-    except Exception as exc:                      # noqa: BLE001
-        console.print(f"[{RED}]Error: {exc}[/]")
+    ap = argparse.ArgumentParser(
+        description="Plot DAPHNE wave-forms with Plotly",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    ap.add_argument("--ip", required=True, type=int, help="endpoint suffix")
+    ap.add_argument("--channels-file", required=True,
+                    help="Python file holding a 'channels_to_acquire' dict")
+    ap.add_argument("--samples", type=int, default=1000, help="# ADC samples")
+    ap.add_argument("-n", "--n_wf", type=int, default=10,
+                    help="# wave-forms per (AFE, channel)")
+    ap.add_argument("--html", default="waveforms.html", help="output file")
+
+    args = ap.parse_args()
+
+    view(
+        ip_suffix=args.ip,
+        channels_per_afe=_load_channels_dict(args.channels_file),
+        samples=args.samples,
+        n_wf=args.n_wf,
+        html=args.html,
+    )

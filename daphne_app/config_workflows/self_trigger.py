@@ -14,8 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
-
-import ivtools
+from daphne_app.hardware.daphne import Daphne
 from rich.console import Console
 from rich.table import Table
 from tqdm import tqdm
@@ -137,7 +136,7 @@ def configure(  # noqa: C901  – keep public signature unfolded for clarity
 
     for suffix in ips:
         full_ip = endpoint_ip(suffix)
-        dev = ivtools.Daphne(full_ip)
+        dev = Daphne(full_ip)
 
         # ── decide progress-bar use ───────────────────────────────────────
         use_tqdm = (
