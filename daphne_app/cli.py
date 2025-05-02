@@ -28,7 +28,7 @@ import typer
 # ──────────────────────────────────────────────
 from daphne_app.utils.settings   import valid_ips
 from daphne_app.utils.ip_utils   import ip_suffix, endpoint_ip
-
+from daphne_app.config_workflows import bias as bias_conf
 from daphne_app.config_workflows import (
     clocks,
     analog,
@@ -96,6 +96,33 @@ def _parse_ip_list(ip_arg: str) -> List[int]:
     return ips
 
 
+# helper – import arbitrary python file with `channels_to_acquire`
+def _channels_from_py(file: Path) -> Dict[int, List[int]]:
+    spec = spec_from_file_location("ch_cfg", file)
+    mod  = module_from_spec(spec)            # type: ignore[arg-type]
+    spec.loader.exec_module(mod)             # type: ignore[union-attr]
+    return getattr(mod, "channels_to_acquire")
+
+# helper – fetch channels and inverter info from details.json  ⇣⇣⇣
+def _channels_from_json(details: Path) -> tuple[int, dict[int, list[int]]]:
+    """Return (ip_suffix, {AFE: [ch…]}) taken from *details.json*."""
+    import json, ipaddress
+    data = json.loads(details.read_text())
+    dev  = data["devices"][0]                 # convention: one board / file
+    full_ip = str(ipaddress.ip_address(dev["ip"]))
+    ip_suf  = ip_suffix(full_ip)
+
+    mapping: dict[int, list[int]] = {}
+    for idx in dev["channels"]["indices"]:
+        afe, ch = divmod(idx, 8)
+        mapping.setdefault(afe, []).append(ch)
+    for ch_list in mapping.values():
+        ch_list.sort()
+    return ip_suf, mapping
+# helper –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
+
+
 # ╭───────────────────────────────────────────╮
 # │ CONFIGURE                                 │
 # ╰───────────────────────────────────────────╯
@@ -114,6 +141,29 @@ def conf_analog(
     """Write PGA gains / offset-DAC values."""
     analog.configure(_parse_ip_list(ip), offset_mv=offset, gain=gain)
 
+@config_app.command("bias")
+def conf_bias(
+    ip: str = typer.Option("ALL", "--ip"),
+    mv: str = typer.Option("700,700,700,700,700",
+                           "--mv",
+                           help="Five comma-sep values or single int (mV)"),
+):
+    """
+    Set the BIAS voltage (mV) on each AFE.
+    """
+    mv_list = [int(x) for x in mv.split(",")] if "," in mv else int(mv)
+    bias_conf.configure_bias(_parse_ip_list(ip), mv_list)
+
+
+@config_app.command("trim")
+def conf_trim(
+    ip: str = typer.Option("ALL", "--ip"),
+    val: int = typer.Option(0, "--val", help="0-31 (same for every channel)"),
+):
+    """
+    Set the TRIM value (0-31) on every channel.
+    """
+    bias_conf.configure_trim(_parse_ip_list(ip), val)
 
 @config_app.command("datamodes")
 def conf_datamodes(ip: str = typer.Option("ALL", "--ip")):
@@ -205,6 +255,16 @@ def check_an(ip: str = typer.Option("ALL", "--ip")):
     """Read back PGA gains / offsets and compare with golden."""
     analog_check.run(_parse_ip_list(ip))
 
+@check_app.command("bias")
+def check_bias(ip: str = typer.Option("ALL", "--ip")):
+    """Read and print bias monitor values."""
+    bias_conf.check_bias(_parse_ip_list(ip))
+
+
+@check_app.command("trim")
+def check_trim(ip: str = typer.Option("ALL", "--ip")):
+    """Read back TRIM registers."""
+    bias_conf.check_trim(_parse_ip_list(ip))
 
 @check_app.command("self-trigger")
 def check_st(ip: str = typer.Option("ALL", "--ip")):
@@ -235,26 +295,45 @@ def _check_all(ctx: typer.Context,
 # ╭───────────────────────────────────────────╮
 # │ CAPTURE                                   │
 # ╰───────────────────────────────────────────╯
-# helper – fetch channels from details.json
-def _channels_from_json(details: Path) -> tuple[int, Dict[int, List[int]]]:
+#
+def _boards_from_json(details: Path) -> list[
+        tuple[int, dict[int, list[int]], set[int]]]:
+    """
+    Parse *details.json* and return **one entry per board**
+
+        [
+          (ip_suffix,
+           {AFE: [ch,…], …},
+           {global_ch,…}          # inverted channels
+          ),
+          …
+        ]
+    """
     data = json.loads(details.read_text())
-    dev  = data["devices"][0]          # by convention one board per file
-    full_ip = str(ipaddress.ip_address(dev["ip"]))
-    mapping: Dict[int, List[int]] = {}
-    for idx in dev["channels"]["indices"]:
-        afe, ch = divmod(idx, 8)
-        mapping.setdefault(afe, []).append(ch)
-    for v in mapping.values():
-        v.sort()
-    return ip_suffix(full_ip), mapping
+    boards: list[tuple[int, dict[int, list[int]], set[int]]] = []
+
+    for dev in data["devices"]:
+        full_ip = str(ipaddress.ip_address(dev["ip"]))
+        suf     = ip_suffix(full_ip)
+
+        # ---- channels per AFE -------------------------------------------
+        ch_map: dict[int, list[int]] = {}
+        for idx in dev["channels"]["indices"]:
+            afe, ch = divmod(idx, 8)
+            ch_map.setdefault(afe, []).append(ch)
+        for lst in ch_map.values():
+            lst.sort()
+
+        # ---- digital inverter mask --------------------------------------
+        inv_set: set[int] = set(
+            dev.get("self_trigger", {}).get("enable_inverter", [])
+        )
+
+        boards.append((suf, ch_map, inv_set))
+
+    return boards
 
 
-# helper – import arbitrary python file with `channels_to_acquire`
-def _channels_from_py(file: Path) -> Dict[int, List[int]]:
-    spec = spec_from_file_location("ch_cfg", file)
-    mod  = module_from_spec(spec)            # type: ignore[arg-type]
-    spec.loader.exec_module(mod)             # type: ignore[union-attr]
-    return getattr(mod, "channels_to_acquire")
 
 # ------------------------------------------------------------------
 @capture_app.command("plotly")
@@ -277,6 +356,13 @@ def cap_plotly(
     n_wf:    int = typer.Option(10,   "--n-wf",    help="# wave-forms / ch"),
     # ----- output --------------------------------------------------
     html: str = typer.Option("waveforms.html", "--html", help="Output HTML"),
+    # ----- trigger -------------------------------------------------
+    trigger: str = typer.Option(
+        "software",
+        "--trigger",
+        help="Trigger strategy:  software | aligned | none",
+        case_sensitive=False,
+    ),
     save_wf: str | None = typer.Option(
         None, "--save-wf",
         help="Optional .npz / .npy / .pkl dump of raw wave-forms",
@@ -305,6 +391,7 @@ def cap_plotly(
         samples          = samples,
         n_wf             = n_wf,
         html             = html,
+        trigger          = trigger.lower(),
         save_wf          = save_wf,
     )
 
@@ -327,68 +414,79 @@ from daphne_app.calibration import offsets as offsets_calib
 
 @calib_app.command("offsets")
 def calib_offsets(
-    # where to get channels / IP
-    details: Path = typer.Option(None, "--details", exists=True, readable=True,
-                                 help="details.json with IP & channel list"),
-    channels_file: Path = typer.Option(None, "--channels-file", exists=True, readable=True,
-                                       help="Python file with `channels_to_acquire`"),
-    ip: int = typer.Option(None, "--ip", help="Endpoint suffix (ignored with --details)"),
-    # algo parameters
-    target:   int = typer.Option(4000, "--target", help="Target baseline [ADC]"),
-    band:     int = typer.Option(2,    "--band",   help="±band counts tolerance"),
-    samples:  int = typer.Option(4000, "--samples"),
-    n_wf:     int = typer.Option(3,    "--n-wf"),
-    max_iter: int = typer.Option(7,    "--max-iters"),
-    step_init: int = typer.Option(50,  "--step-init",
-                                  help="Initial DAC step [counts]"),
-    # outputs
-    save_json: Path | None = typer.Option(None, "--save-json",
-                                          help="Write final DAC map here (.json)"),
+    # ── where to get IP & channels ───────────────────────────────────────
+    details: Path = typer.Option(
+        None, "--details", exists=True, readable=True,
+        help="details.json with IP & channel list",
+    ),
+    channels_file: Path = typer.Option(
+        None, "--channels-file", exists=True, readable=True,
+        help="Python file with `channels_to_acquire`",
+    ),
+    ip: int = typer.Option(
+        None, "--ip", help="Endpoint suffix (ignored with --details)",
+    ),
+    # ── algorithm parameters ─────────────────────────────────────────────
+    target:    int = typer.Option(4000, "--target",    help="Target baseline [ADC]"),
+    band:      int = typer.Option(2,    "--band",      help="±band counts tolerance"),
+    samples:   int = typer.Option(4000, "--samples",   help="# ADC samples"),
+    n_wf:      int = typer.Option(3,    "--n-wf",      help="# wave-forms / iter"),
+    max_iter:  int = typer.Option(7,    "--max-iters", help="Maximum iterations"),
+    step_init: int = typer.Option(50,   "--step-init", help="Initial DAC step"),
+    # ── outputs ──────────────────────────────────────────────────────────
+    save_json: Path | None = typer.Option(
+        None, "--save-json", help="Write final DAC map here (.json)",
+    ),
 ) -> None:
     """
     Calibrate PGA **offset DACs** until every channel baseline lies within
     *±band* ADC counts of *target*.
 
-    Strategy
-    --------
-    1. Starting DACs are **read from the board** (“RD OFFSET CH <n>”).
-       Inversion is taken from the JSON field *“enable_inverter”*.
-    2. A binary-shrink loop:
-       – first move by *step-init* DAC counts,
-       – half the step whenever the sign of the error flips,
-       – lock a channel once it enters the target band.
-    3. Stops early when all channels are locked or *max_iters* reached.
-       A convergence plot and a full log are written automatically.
+    **Strategy**
+    1.  Starting DACs are *read from the board* (“RD OFFSET CH \<n>”).
+        Channel inversion comes from *`enable_inverter`* in **details.json**.
+    2.  *Binary-shrink* loop per channel
+        – first move by *step-init* counts
+        – halve the step each time the error changes sign
+        – lock a channel once it is inside the target band.
+    3.  Stop when all channels are locked or **max-iters** is reached.
+        A convergence plot and a full log are written automatically.
 
-    Example
-    -------
+    **Example**
+
+    ```bash
     daphne calibrate offsets --details details.json \\
                              --target 4000 --band 2 \\
                              --step-init 50 --n-wf 3 \\
                              --save-json best_offsets.json
+    ```
     """
+    # ---- resolve boards & channels --------------------------------------
     if details:
-        ip_suf, ch_map, inv_set = _channels_from_json(details)
+        boards = _boards_from_json(details)
     else:
         if not (channels_file and ip):
             typer.secho("Need either --details OR (--channels-file AND --ip)",
                         fg=typer.colors.RED)
             raise typer.Exit(1)
-        ch_map = _channels_from_py(channels_file)
-        ip_suf = ip
+        boards = [(ip,
+                   _channels_from_py(channels_file),
+                   set())]                     # no inverter info available
 
-    offsets_calib.run(
-        ip_suffix        = ip_suf,
-        channels_per_afe = ch_map,
-        inverted_glob    = inv_set if details else set(),
-        target           = target,
-        band             = band,
-        samples          = samples,
-        n_wf             = n_wf,
-        max_iters        = max_iter,
-        step_init        = step_init,
-        save_json        = save_json,
-    )
+    # ---- run calibration for every board --------------------------------
+    for ip_suf, ch_map, inv_set in boards:
+        offsets_calib.run(
+            ip_suffix        = ip_suf,
+            channels_per_afe = ch_map,
+            inverted_glob    = inv_set,
+            target           = target,
+            band             = band,
+            samples          = samples,
+            n_wf             = n_wf,
+            max_iters        = max_iter,
+            step_init        = step_init,
+            save_json        = save_json,
+        )
 
 # ╭───────────────────────────────────────────╮
 # │ Entry-point for  “python -m daphne_app”   │

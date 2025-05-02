@@ -213,7 +213,7 @@ class Daphne:
         """
         # Send the command and get the response
         response = self.command("RD VM ALL")
-        logger.info(f"Response: {response}")
+        #logger.info(f"Response: {response}")
 
         # Regex to extract all key-value pairs, including POWER and TEMP
         # Enhanced regex pattern to ensure all expected variables are captured
@@ -223,7 +223,7 @@ class Daphne:
         if matches:
             # Convert matches to a dictionary
             variables = {key: float(value) for key, value in matches}
-            logger.info(f"Extracted variables: {variables}")
+            #logger.info(f"Extracted variables: {variables}")
             return variables
 
         # Raise an error if no valid matches are found

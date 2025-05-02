@@ -1,50 +1,44 @@
 # daphne_app/calibration/offsets.py
-
 """
-Strategy
---------
+Robust PGA *offset-DAC* calibration
+===================================
+
+The algorithm is now truly “self-centering”:
+
 1.  **Initial state**
-    • Endpoint IP and list of (AFE,CH) pairs come from *details.json*
-      (`devices[0].channels.indices`).
-    • Set *inverted* flag automatically for every global channel that
-      appears in `devices[0].self_trigger.enable_inverter`.
-    • Query each channel with `RD OFFSET CH <n>` and use the current DAC
-      as starting point (fallback 2250).
+    • Endpoint IP, channel list and `enable_inverter` mask come from
+      *details.json* (handed over by the CLI helper).
+    • Present DACs are read with ``RD OFFSET CH <n>``; fallback 2250.
 
-2.  **Iterative loop (≤ max_iters, default 7)**
-    a. Trigger the spy-buffer, collect *n_wf* wave-forms, compute the
-       baseline mean.
-    b. Error := TARGET − mean (flipped for inverted channels).
-    c. If `|error| ≤ band` → **lock** channel, no more writes.
-    d. Else
-       – On first iteration use an **initial step** (`--step-init`, default 50).
-       – Whenever the sign of *error* flips between iterations,
-         `step ← max(1, step/2)`.
-       – New_DAC = clip( old_DAC + sign(error)·step, 2000…2500 ),
-         write with `WR OFFSET CH <n> V <new_dac>`.
-    e. Track the “best” (DAC, |error|) pair for every channel.
+2.  **Adaptive search** (≤ *max_iters*)
+    a. For every unlocked channel acquire *n_wf* wave-forms, compute the
+       baseline mean on the first *samples* points.
+    b. *Error* := Target – Mean.
+       For inverted channels the sign is flipped.
+    c. **Lock** when |error| ≤ *band*.
+    d. Otherwise choose a **step**:
 
-3.  **Termination**
-    • Stops early when every channel is locked, or after *max_iters*.
-    • Prints / logs a summary and saves:
-        – `offset_calib_<ip>.log`          full text log
-        – `offset_calib_<ip>.png`          convergence plot
-        – Optional `--save-json best.json`  ⇒  `{"0": 2248, "1": …}`
+       ┌ first iteration → *step_init*
+       ├ overshoot (sign flip) → step := max(4, step/2)
+       └ plateau at a rail → step := max(4, step×2)
 
-CLI options
------------
---target          baseline target in ADC counts                [4000]
---band            lock when |mean−target| ≤ band               [2]
---samples         ADC samples per waveform                      4000
---n-wf            wave-forms per iteration per channel           3
---step-init       initial DAC step (counts)                     50
---max-iters       maximum iterations                             7
---save-json       path to dump best DACs as JSON                None
+       The rail handling guarantees progress when the first guess pushed
+       the DAC to its min/max.
+    e. New_DAC := clip(old ± step, *OFFSET_MIN* … *OFFSET_MAX*).
+       ``WR OFFSET CH <n> V <New_DAC>``
+
+3.  The smallest |error| observed for every channel is remembered as
+    *best DAC*.  At the end a JSON dump, PNG convergence plot and a
+    full text log are produced.
+
+Default boundaries have been widened to **1500 … 3000** (covers the
+useful DAC range on most boards).
 """
 
 from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set
 import json, re, time, logging
 
 import numpy as np
@@ -52,151 +46,152 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from daphne_app.hardware.daphne import Daphne
-from daphne_app.utils.ip_utils import endpoint_ip, ip_suffix
+from daphne_app.utils.ip_utils import endpoint_ip
+
+# ---------- user-tuneable constants ---------------------------------------
+OFFSET_MIN = 1500
+OFFSET_MAX = 3000
+DAC_FALLBACK = 2250            # used when RD OFFSET fails / regex miss
 
 OFFSET_RE = re.compile(r"OFFSET DAC REG=\s*(\d+)")
 
-# ───────────────────────── helpers ──────────────────────────
-def _channels_from_json(details: Path) -> tuple[int, Dict[int, List[int]], set[int]]:
-    """Return (ip_suffix, {AFE:[ch,…]}, inverted_global_channels)."""
-    cfg  = json.loads(details.read_text())
-    dev  = cfg["devices"][0]
+# ---------- helpers -------------------------------------------------------
+def _read_dac(dev: Daphne, ch: int) -> int:
+    """RD OFFSET CH <n>  → Extract current DAC or fallback"""
+    try:
+        txt = dev.command(f"RD OFFSET CH {ch}")
+        dac = int(OFFSET_RE.search(txt).group(1))
+    except Exception:
+        dac = DAC_FALLBACK
+    return np.clip(dac, OFFSET_MIN, OFFSET_MAX)
 
-    inv_glob: set[int] = set()
-    if dev.get("self_trigger", {}).get("enable_inverter"):
-        inv_glob = {int(x) for x in dev["self_trigger"]["enable_inverter"]}
-
-    mapping: Dict[int, List[int]] = {}
-    for idx in dev["channels"]["indices"]:
-        afe, ch = divmod(idx, 8)
-        mapping.setdefault(afe, []).append(ch)
-    for lst in mapping.values():
-        lst.sort()
-    return ip_suffix(dev["ip"]), mapping, inv_glob
-
-
-def _read_initial_dacs(dev: Daphne, glob_ch: List[int]) -> Dict[int, int]:
-    """Query the board for existing DAC values (falls back to 2250)."""
-    dacs: Dict[int, int] = {}
-    for ch in glob_ch:
-        try:
-            resp = dev.command(f"RD OFFSET CH {ch}")
-            m = OFFSET_RE.search(resp)
-            dacs[ch] = int(m.group(1)) if m else 2250
-        except Exception:
-            dacs[ch] = 2250
-    return dacs
-
-
-# ───────────────────── main algorithm ───────────────────────
+# --------------------------------------------------------------------------
 def run(
     *,
     ip_suffix: int,
     channels_per_afe: Dict[int, List[int]],
-    inverted_glob: set[int] = frozenset(),
-    target: int   = 4000,
-    band:   int   = 2,
-    samples: int  = 4000,
-    n_wf:    int  = 3,
-    max_iters: int = 7,
-    step_init: int = 50,
-    save_json: Path | None = None,
+    inverted_glob: Set[int],
+    target: int,
+    band: int,
+    samples: int,
+    n_wf: int,
+    max_iters: int,
+    step_init: int,
+    save_json: Path | None,
 ) -> None:
 
     full_ip = endpoint_ip(ip_suffix)
     dev     = Daphne(full_ip)
 
-    glob_ch   = [8*afe + ch for afe,chs in channels_per_afe.items() for ch in chs]
-    offsets   = _read_initial_dacs(dev, glob_ch)
-    steps     = {c: step_init for c in glob_ch}
-    locked    = {c: False      for c in glob_ch}
-    best_err  = {c: 1e9        for c in glob_ch}   # keep best (min abs err)
-    best_dac  = {c: offsets[c] for c in glob_ch}
-    history   = {c: []         for c in glob_ch}
-
-    # logging
-    logf = f"offset_calib_{full_ip.replace('.','_')}.log"
     logging.basicConfig(
-        filename=logf, filemode="w",
+        filename=f"offset_calib_{full_ip}.log",
         level=logging.INFO,
-        format="%(asctime)s | %(message)s",
+        format="%(levelname)s:%(name)s:%(message)s",
     )
-    console = logging.StreamHandler(); console.setLevel(logging.INFO)
-    logging.getLogger().addHandler(console)
+    log = logging.getLogger("offset_calib")
+    log.info("Calibration started for %s", full_ip)
 
-    logging.info("Starting offsets: " + ", ".join(
-        f"CH{c:02}={d}" for c,d in offsets.items()))
+    # -------- bookkeeping --------------------------------------------------
+    chan_glob = sorted(
+        afe * 8 + ch for afe, lst in channels_per_afe.items() for ch in lst
+    )
 
-    dt = 16e-9
-    for it in range(max_iters):
-        logging.info(f"── iteration {it+1}/{max_iters} ──")
+    dac_now   = {g: _read_dac(dev, g) for g in chan_glob}
+    step      = {g: step_init        for g in chan_glob}
+    locked    = {g: False            for g in chan_glob}
+    best_dac  = {g: dac_now[g]       for g in chan_glob}
+    best_err  = {g: 99999.           for g in chan_glob}
 
-        mean_per = {}
-        for c in tqdm(glob_ch, desc="WF acquisition", leave=False):
-            afe, ch_loc = divmod(c, 8)
-            wfs = [dev.read_waveform(afe, ch_loc, samples=samples)
-                   for _ in range(n_wf)]
-            mean_val = float(np.mean(np.vstack(wfs)[:, :samples]))
-            mean_per[c] = mean_val
-            history[c].append(mean_val)
+    history: dict[int, list[float]] = {g: [] for g in chan_glob}
 
-        # adjust
-        for c, mean_val in mean_per.items():
-            if locked[c]:
+    # print / log starting values
+    for g in chan_glob:
+        inv = g in inverted_glob
+        log.info("CH%02d  start DAC %d  inverted=%s", g, dac_now[g], inv)
+
+    # -------- helper lambdas ----------------------------------------------
+    def _acquire_mean(g: int) -> float:
+        afe, ch = divmod(g, 8)
+        wfs = []
+        for _ in range(n_wf):
+            dev.write_reg(0x2020, [1234]); dev.write_reg(0x2021, [1234])
+            wf = dev.read_waveform(afe, ch, samples=samples)
+            if wf.size:
+                wfs.append(wf)
+        return float(np.mean(wfs)) if wfs else np.nan
+
+    # -------- main loop ----------------------------------------------------
+    for it in range(1, max_iters + 1):
+        log.info("--- iteration %d ---", it)
+        for g in chan_glob:
+
+            if locked[g]:
                 continue
-            err = target - mean_val
-            if c in inverted_glob:
-                err *= -1
 
-            # keep best
-            if abs(err) < best_err[c]:
-                best_err[c], best_dac[c] = abs(err), offsets[c]
-
-            if abs(err) <= band:
-                locked[c] = True
-                logging.info(f"CH{c:02} locked | mean={mean_val:.1f}")
+            mean = _acquire_mean(g)
+            if np.isnan(mean):
+                log.warning("CH%02d  no data – skipped", g)
                 continue
 
-            # flip detection → halve step
-            if len(history[c]) > 2:
-                a,b,curr = history[c][-3:]
-                if (curr-b)*(b-a) < 0:
-                    steps[c] = max(1, steps[c]//2)
+            error = target - mean
+            if g in inverted_glob:
+                error *= -1
 
-            delta          = int(np.sign(err)*steps[c])
-            new_dac        = int(np.clip(offsets[c]+delta, 2000, 2500))
-            offsets[c]     = new_dac
-            dev.command(f"WR OFFSET CH {c} V {new_dac}")
+            # remember best
+            if abs(error) < best_err[g]:
+                best_err[g] = abs(error)
+                best_dac[g] = dac_now[g]
 
-            logging.info(f"CH{c:02}: mean={mean_val:.1f} err={err:+.1f} "
-                         f"→ DAC {new_dac} (step {steps[c]})")
+            # lock ?
+            if abs(error) <= band:
+                locked[g] = True
+                log.info("CH%02d  locked @ %d (err=% .1f)", g, dac_now[g], error)
+                continue
+
+            # adapt step
+            sign = np.sign(error)
+            if history[g] and np.sign(history[g][-1]) != sign:
+                step[g] = max(4, step[g] // 2)          # overshoot → shrink
+            elif dac_now[g] in (OFFSET_MIN, OFFSET_MAX):
+                step[g] = max(4, step[g] * 2)           # stuck on rail → grow
+
+            new_dac = int(np.clip(dac_now[g] + sign * step[g], OFFSET_MIN, OFFSET_MAX))
+            dev.command(f"WR OFFSET CH {g} V {new_dac}")
+            dac_now[g] = new_dac
+            history[g].append(error)
+
+            coarse_fine = "coarse" if step[g] > 32 else "fine"
+            flip_txt    = "flip " if len(history[g])>=2 and np.sign(history[g][-2])!=sign else ""
+            log.info("CH%02d  %s→ %d  err=% .1f  step=%4d  %s",
+                     g, flip_txt, new_dac, error, step[g], coarse_fine)
 
         if all(locked.values()):
-            logging.info("🎯 all channels within band — stopping.")
+            log.info("All channels locked – early stop")
             break
-        time.sleep(0.5)
 
-    # summary
-    logging.info("Best (min-error) DACs:")
-    for c in sorted(best_dac):
-        logging.info(f"  CH{c:02}  {best_dac[c]}  (|err|={best_err[c]:.1f})")
+    # -------- summary & artefacts -----------------------------------------
+    log.info("=== best DAC map ===")
+    for g in chan_glob:
+        log.info("CH%02d %d", g, best_dac[g])
 
     if save_json:
-        with Path(save_json).expanduser().open("w") as fh:
-            json.dump(best_dac, fh, indent=2)
-        logging.info(f"Saved JSON → {save_json}")
+        js = {str(k): int(v) for k, v in best_dac.items()}
+        Path(save_json).write_text(json.dumps(js, indent=2))
+        log.info("Best DACs written to %s", save_json)
 
-    # convergence plot
-    plt.figure(figsize=(12,5))
-    for c, series in history.items():
-        plt.plot(series, label=f"CH{c:02}", alpha=.6)
-    plt.axhline(target, ls="--", c="k")
-    plt.fill_between(range(len(next(iter(history.values())))),
-                     target-band, target+band,
-                     color="green", alpha=.15, label="target band")
-    plt.xlabel("iteration"); plt.ylabel("baseline [ADC]")
-    plt.title(f"Offset tuning  –  endpoint {full_ip}")
-    plt.grid(alpha=.3); plt.tight_layout()
-    plt.legend(fontsize=8, ncol=4)
-    out_png = f"offset_calib_{full_ip.replace('.','_')}.png"
-    plt.savefig(out_png, dpi=300); logging.info(f"Plot saved → {out_png}")
+    # convergence plot ------------------------------------------------------
+    plt.figure(figsize=(11,5))
+    for g, err_list in history.items():
+        if err_list:
+            plt.plot(err_list, label=f"CH{g:02}")
+    plt.axhline( band, color="k", ls="--")
+    plt.axhline(-band, color="k", ls="--")
+    plt.xlabel("iteration")
+    plt.ylabel("target – mean  [ADC]")
+    plt.title(f"Offset convergence  {full_ip}")
+    plt.grid(True, ls=":")
+    if history and any(history[g] for g in chan_glob):
+        plt.legend(ncol=4, fontsize=8)
+    png = Path(f"offset_calib_{full_ip}.png")
+    plt.tight_layout(); plt.savefig(png, dpi=300)
+    log.info("Convergence plot saved to %s", png)
