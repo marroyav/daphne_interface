@@ -1,4 +1,3 @@
-# daphne_app/cli.py
 """
 Top-level Typer CLI for every-day DAPHNE DAQ tasks
 =================================================
@@ -22,6 +21,7 @@ import ipaddress
 import sys
 
 import typer
+
 
 # ──────────────────────────────────────────────
 #  Local imports – adjust paths / names if needed
@@ -55,17 +55,22 @@ from daphne_app.capture_workflows import (
     live_plot,
 )
 
+
+
 # ──────────────────────────────────────────────
 #  Typer “sub-apps”
 # ──────────────────────────────────────────────
-app          = typer.Typer(help="DAPHNE helper CLI", add_completion=False)
+app          = typer.Typer(help="DAPHNE helper CLI",
+                           rich_markup_mode="rich", add_completion=False)
 config_app   = typer.Typer(help="Board-configuration workflows")
 check_app    = typer.Typer(help="One-shot / live sanity checks")
 capture_app  = typer.Typer(help="Spy-buffer capture & viewers")
+calib_app    = typer.Typer(help="Automated calibrations")
 
 app.add_typer(config_app, name="configure")
 app.add_typer(check_app,  name="check")
 app.add_typer(capture_app, name="capture")
+app.add_typer(calib_app,   name="calibrate")
 
 # ╭───────────────────────────────────────────╮
 # │ Helpers                                   │
@@ -314,6 +319,76 @@ def cap_live(
     """Simple matplotlib live-scroll viewer (Qt backend)."""
     live_plot.run(ip, afe, ch, samples)
 
+
+# ╭───────────────────────────────────────────╮
+# │ CALIBRATE – offsets                       │
+# ╰───────────────────────────────────────────╯
+from daphne_app.calibration import offsets as offsets_calib
+
+@calib_app.command("offsets")
+def calib_offsets(
+    # where to get channels / IP
+    details: Path = typer.Option(None, "--details", exists=True, readable=True,
+                                 help="details.json with IP & channel list"),
+    channels_file: Path = typer.Option(None, "--channels-file", exists=True, readable=True,
+                                       help="Python file with `channels_to_acquire`"),
+    ip: int = typer.Option(None, "--ip", help="Endpoint suffix (ignored with --details)"),
+    # algo parameters
+    target:   int = typer.Option(4000, "--target", help="Target baseline [ADC]"),
+    band:     int = typer.Option(2,    "--band",   help="±band counts tolerance"),
+    samples:  int = typer.Option(4000, "--samples"),
+    n_wf:     int = typer.Option(3,    "--n-wf"),
+    max_iter: int = typer.Option(7,    "--max-iters"),
+    step_init: int = typer.Option(50,  "--step-init",
+                                  help="Initial DAC step [counts]"),
+    # outputs
+    save_json: Path | None = typer.Option(None, "--save-json",
+                                          help="Write final DAC map here (.json)"),
+) -> None:
+    """
+    Calibrate PGA **offset DACs** until every channel baseline lies within
+    *±band* ADC counts of *target*.
+
+    Strategy
+    --------
+    1. Starting DACs are **read from the board** (“RD OFFSET CH <n>”).
+       Inversion is taken from the JSON field *“enable_inverter”*.
+    2. A binary-shrink loop:
+       – first move by *step-init* DAC counts,
+       – half the step whenever the sign of the error flips,
+       – lock a channel once it enters the target band.
+    3. Stops early when all channels are locked or *max_iters* reached.
+       A convergence plot and a full log are written automatically.
+
+    Example
+    -------
+    daphne calibrate offsets --details details.json \\
+                             --target 4000 --band 2 \\
+                             --step-init 50 --n-wf 3 \\
+                             --save-json best_offsets.json
+    """
+    if details:
+        ip_suf, ch_map, inv_set = _channels_from_json(details)
+    else:
+        if not (channels_file and ip):
+            typer.secho("Need either --details OR (--channels-file AND --ip)",
+                        fg=typer.colors.RED)
+            raise typer.Exit(1)
+        ch_map = _channels_from_py(channels_file)
+        ip_suf = ip
+
+    offsets_calib.run(
+        ip_suffix        = ip_suf,
+        channels_per_afe = ch_map,
+        inverted_glob    = inv_set if details else set(),
+        target           = target,
+        band             = band,
+        samples          = samples,
+        n_wf             = n_wf,
+        max_iters        = max_iter,
+        step_init        = step_init,
+        save_json        = save_json,
+    )
 
 # ╭───────────────────────────────────────────╮
 # │ Entry-point for  “python -m daphne_app”   │
