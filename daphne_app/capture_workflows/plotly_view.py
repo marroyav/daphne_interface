@@ -75,7 +75,7 @@ def view(
 
     afes = sorted(channels_per_afe.keys())
     rows, cols = 3, 3
-    subplot_titles = [f"AFE {a}" for a in afes] + ["RMS statistics"]
+    subplot_titles = [f"AFE {a}" for a in afes] + [""]
 
     fig = make_subplots(
         rows=rows,
@@ -155,19 +155,19 @@ def view(
             rms_stats[f"AFE {afe} CH {ch}"] = round(_rms(wf_arr.ravel()), 2)
 
     # ─────────────── RMS table ───────────────
-    hdr, cells = zip(*sorted(rms_stats.items(), key=lambda kv: kv[0]))
-    fig.add_trace(
-        go.Table(
-            header=dict(
-                values=["Channel", "RMS [mV]"],
-                fill_color="lightgrey",
-                font=dict(size=13),
-                align="left",
-            ),
-            cells=dict(values=[hdr, cells], align="left", font=dict(size=12)),
-        ),
-        row=3, col=1,
-    )
+    #hdr, cells = zip(*sorted(rms_stats.items(), key=lambda kv: kv[0]))
+    #fig.add_trace(
+    #    go.Table(
+    #        header=dict(
+    #            values=["Channel", "RMS [mV]"],
+    #            fill_color="lightgrey",
+    #            font=dict(size=13),
+    #            align="left",
+    #        ),
+    #        cells=dict(values=[hdr, cells], align="left", font=dict(size=12)),
+    #    ),
+    #    row=3, col=1,
+    #)
 
     # ─────────────── layout ───────────────
     fig.update_xaxes(title="time [µs]", row=1, col=1)
@@ -177,7 +177,7 @@ def view(
         template="simple_white",
         margin=dict(l=65, r=35, t=80, b=55),
         title=dict(
-            text=f"DAPHNE spy-buffer wave-forms – endpoint {full_ip}",
+            text=f"DAPHNE spy-buffer waveforms – endpoint {full_ip}",
             x=0.01, xanchor="left",
         ),
     )

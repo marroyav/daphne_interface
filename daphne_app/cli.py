@@ -1,18 +1,26 @@
+# daphne_app/cli.py
 """
-Top-level Typer CLI for every-day DAPHNE DAQ tasks
-=================================================
+Top-level CLI for every-day DAPHNE DAQ tasks
+===========================================
 
-$ daphne configure --ip 4,5            # full conf.   (clocks → analog → …)
-$ daphne configure analog --ip 7       # only analog offsets / gains
-$ daphne configure json cfg.json       # drive everything from JSON
+$ daphne configure --ip 4,5                 # full config (clocks → analog → …)
+$ daphne configure bias   --ip 7 --mv 700   # write VBIASCTRL
+$ daphne configure trim   --ip 7 --file trim.json
+$ daphne configure json   cfg.json          # drive everything from JSON
 
-$ daphne check --ip 7                  # full diagnostic suite
-$ daphne check counters --ip 4,5       # only the counter spy
+$ daphne check                --ip 7        # full diagnostic suite
+$ daphne check bias           --ip 4,5      # read back VBIAS / POWER / TEMP
+$ daphne check trim           --ip 7
 
-$ daphne capture plotly --details details.json -n-wf 50 --html wf.html
+$ daphne calibrate offsets    --details details.json …
+$ daphne capture  plotly      --details details.json …
 """
 
 from __future__ import annotations
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Standard lib
+# ────────────────────────────────────────────────────────────────────────────
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec
 from typing import List, Dict
@@ -20,21 +28,25 @@ import json
 import ipaddress
 import sys
 
+# ────────────────────────────────────────────────────────────────────────────
+#  3rd-party
+# ────────────────────────────────────────────────────────────────────────────
 import typer
+import rich
 
-
-# ──────────────────────────────────────────────
-#  Local imports – adjust paths / names if needed
-# ──────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+#  Local imports    (all grouped here → Typer completion works reliably)
+# ────────────────────────────────────────────────────────────────────────────
 from daphne_app.utils.settings   import valid_ips
 from daphne_app.utils.ip_utils   import ip_suffix, endpoint_ip
-from daphne_app.config_workflows import bias as bias_conf
+
 from daphne_app.config_workflows import (
     clocks,
     analog,
     datamodes,
     trigger,
     self_trigger,
+    bias       as bias_conf,        # NEW
 )
 
 from daphne_app.check_workflows import (
@@ -45,36 +57,29 @@ from daphne_app.check_workflows import (
     analog_check,
     self_trigger as self_trigger_check,
 )
-
 from daphne_app.config_workflows.self_trigger import (
     _translate_json_kwargs as _st_json_kwargs,
 )
+from daphne_app.calibration import offsets as offsets_calib
+from daphne_app.capture_workflows import plotly_view, live_plot
 
-from daphne_app.capture_workflows import (
-    plotly_view,
-    live_plot,
-)
-
-
-
-# ──────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 #  Typer “sub-apps”
-# ──────────────────────────────────────────────
-app          = typer.Typer(help="DAPHNE helper CLI",
-                           rich_markup_mode="rich", add_completion=False)
+# ────────────────────────────────────────────────────────────────────────────
+app          = typer.Typer(help="DAPHNE helper CLI")          # add_completion=True by default
 config_app   = typer.Typer(help="Board-configuration workflows")
 check_app    = typer.Typer(help="One-shot / live sanity checks")
 capture_app  = typer.Typer(help="Spy-buffer capture & viewers")
-calib_app    = typer.Typer(help="Automated calibrations")
+calib_app    = typer.Typer(help="Calibration utilities")
 
 app.add_typer(config_app, name="configure")
 app.add_typer(check_app,  name="check")
-app.add_typer(capture_app, name="capture")
-app.add_typer(calib_app,   name="calibrate")
+app.add_typer(capture_app,name="capture")
+app.add_typer(calib_app,  name="calibrate")
 
-# ╭───────────────────────────────────────────╮
-# │ Helpers                                   │
-# ╰───────────────────────────────────────────╯
+# ╭──────────────────────────────────────────────────────────────────────────╮
+# │ Helper                                                                  │
+# ╰──────────────────────────────────────────────────────────────────────────╯
 def _parse_ip_list(ip_arg: str) -> List[int]:
     """
     Convert “4,5,7” or “ALL” into a list of endpoint suffix integers.
@@ -86,46 +91,16 @@ def _parse_ip_list(ip_arg: str) -> List[int]:
     try:
         ips = [int(x) for x in ip_arg.split(",") if x]
     except ValueError as exc:
-        raise typer.BadParameter(
-            "IP list must be comma-separated integers or ALL"
-        ) from exc
+        raise typer.BadParameter("IP list must be comma-separated integers or ALL") from exc
 
     invalid = [x for x in ips if x not in valid_ips()]
     if invalid:
         raise typer.BadParameter(f"Invalid IP(s): {invalid}. Valid: {valid_ips()}")
     return ips
 
-
-# helper – import arbitrary python file with `channels_to_acquire`
-def _channels_from_py(file: Path) -> Dict[int, List[int]]:
-    spec = spec_from_file_location("ch_cfg", file)
-    mod  = module_from_spec(spec)            # type: ignore[arg-type]
-    spec.loader.exec_module(mod)             # type: ignore[union-attr]
-    return getattr(mod, "channels_to_acquire")
-
-# helper – fetch channels and inverter info from details.json  ⇣⇣⇣
-def _channels_from_json(details: Path) -> tuple[int, dict[int, list[int]]]:
-    """Return (ip_suffix, {AFE: [ch…]}) taken from *details.json*."""
-    import json, ipaddress
-    data = json.loads(details.read_text())
-    dev  = data["devices"][0]                 # convention: one board / file
-    full_ip = str(ipaddress.ip_address(dev["ip"]))
-    ip_suf  = ip_suffix(full_ip)
-
-    mapping: dict[int, list[int]] = {}
-    for idx in dev["channels"]["indices"]:
-        afe, ch = divmod(idx, 8)
-        mapping.setdefault(afe, []).append(ch)
-    for ch_list in mapping.values():
-        ch_list.sort()
-    return ip_suf, mapping
-# helper –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-
-
-
-# ╭───────────────────────────────────────────╮
-# │ CONFIGURE                                 │
-# ╰───────────────────────────────────────────╯
+# ╭──────────────────────────────────────────────────────────────────────────╮
+# │ CONFIGURE                                                               │
+# ╰──────────────────────────────────────────────────────────────────────────╯
 @config_app.command("clocks")
 def conf_clocks(ip: str = typer.Option("ALL", "--ip")):
     """Re-lock and verify the clock-tree."""
@@ -141,29 +116,31 @@ def conf_analog(
     """Write PGA gains / offset-DAC values."""
     analog.configure(_parse_ip_list(ip), offset_mv=offset, gain=gain)
 
+
 @config_app.command("bias")
 def conf_bias(
     ip: str = typer.Option("ALL", "--ip"),
-    mv: str = typer.Option("700,700,700,700,700",
-                           "--mv",
-                           help="Five comma-sep values or single int (mV)"),
+    mv: int = typer.Option(700, "--mv", help="VBIASCTRL in mV"),
 ):
-    """
-    Set the BIAS voltage (mV) on each AFE.
-    """
-    mv_list = [int(x) for x in mv.split(",")] if "," in mv else int(mv)
-    bias_conf.configure_bias(_parse_ip_list(ip), mv_list)
+    """Write *VBIASCTRL* (same value to every AFE)."""
+    bias_conf.configure_bias(_parse_ip_list(ip), vbias_mv=mv)
 
 
 @config_app.command("trim")
 def conf_trim(
-    ip: str = typer.Option("ALL", "--ip"),
-    val: int = typer.Option(0, "--val", help="0-31 (same for every channel)"),
+    ip: str = typer.Option(..., "--ip"),
+    file: Path = typer.Option(..., "--file", exists=True, readable=True,
+                              help="JSON with {channel: value} map"),
 ):
     """
-    Set the TRIM value (0-31) on every channel.
+    Write TRIM DACs from a JSON file.
+
+    The file must contain a flat dict where keys are *global* channels 0-39,
+    values are integer DAC counts 0-4095.
     """
-    bias_conf.configure_trim(_parse_ip_list(ip), val)
+    trim_map = json.loads(file.read_text())
+    bias_conf.configure_trim(_parse_ip_list(ip), trim_map=trim_map)
+
 
 @config_app.command("datamodes")
 def conf_datamodes(ip: str = typer.Option("ALL", "--ip")):
@@ -189,8 +166,6 @@ def configure_from_json(file: Path):
     Parse *details.json* (or any compatible file) and execute every step
     (clocks → analog → datamode → self-trigger → trigger) for each board.
     """
-    import rich
-
     cfg    = json.loads(file.read_text())
     common = cfg["common_conf"]
 
@@ -200,41 +175,34 @@ def configure_from_json(file: Path):
 
         rich.print(f"[bold]→ Configuring {full_ip}[/]")
 
-        # 1. clocks
-        clocks.configure([suf])
-
-        # 2. analog (only listed channels)
-        idx   = dev["channels"]["indices"]
+        clocks.configure([suf])                            # 1
+        idx   = dev["channels"]["indices"]                 # 2
         offs  = dev["channels"]["offsets"]
         gains = [common["offset_gain"]] * len(idx)
         analog.configure([suf], offsets=offs, gains=gains, only_indices=idx)
-
-        # 3. data-mode
-        datamodes.configure([suf], force_mode=dev["mode"])
-
-        # 4. self-trigger
-        if dev.get("self_trigger"):
-            self_trigger.configure([suf], **_st_json_kwargs(dev["self_trigger"]))
-
-        # 5. trigger matrix (if board belongs to full-stream set)
-        if suf in trigger.full_stream_endpoints():
+        datamodes.configure([suf], force_mode=dev["mode"]) # 3
+        if dev.get("self_trigger"):                        # 4
+            self_trigger.configure(
+                [suf],
+                **_st_json_kwargs(dev["self_trigger"]),)
+              # **self_trigger.translate_json_kwargs(dev["self_trigger"]))
+        if suf in trigger.full_stream_endpoints():         # 5
             trigger.configure_full_stream([suf])
 
     typer.secho("✅  Configuration finished", fg=typer.colors.GREEN)
 
-
-# ╭───────────────────────────────────────────╮
-# │ CHECK                                     │
-# ╰───────────────────────────────────────────╯
+# ╭──────────────────────────────────────────────────────────────────────────╮
+# │ CHECK                                                                   │
+# ╰──────────────────────────────────────────────────────────────────────────╯
 @check_app.command("datamodes")
 def check_dm(ip: str = typer.Option("ALL", "--ip")):
-    """Verify that registers 0x3000 / 0x6001 match expectations."""
+    """Verify registers 0x3000 / 0x6001."""
     datamodes_check.run(_parse_ip_list(ip))
 
 
 @check_app.command("endpoints")
 def check_endpoints_cmd(ip: str = typer.Option("ALL", "--ip")):
-    """Ping & basic I2C ping of every AFE."""
+    """Ping & I²C ping every AFE."""
     endpoints.verify(_parse_ip_list(ip))
 
 
@@ -246,7 +214,7 @@ def check_ts(ip: str = typer.Option("ALL", "--ip")):
 
 @check_app.command("counters")
 def check_ct(ip: str = typer.Option("ALL", "--ip")):
-    """Spy on the run-time error counters."""
+    """Spy on run-time error counters."""
     counters.spy(_parse_ip_list(ip))
 
 
@@ -255,133 +223,95 @@ def check_an(ip: str = typer.Option("ALL", "--ip")):
     """Read back PGA gains / offsets and compare with golden."""
     analog_check.run(_parse_ip_list(ip))
 
+
 @check_app.command("bias")
 def check_bias(ip: str = typer.Option("ALL", "--ip")):
-    """Read and print bias monitor values."""
+    """Read back VBIAS, POWER, TEMP."""
     bias_conf.check_bias(_parse_ip_list(ip))
 
 
 @check_app.command("trim")
 def check_trim(ip: str = typer.Option("ALL", "--ip")):
-    """Read back TRIM registers."""
+    """Dump TRIM registers."""
     bias_conf.check_trim(_parse_ip_list(ip))
+
 
 @check_app.command("self-trigger")
 def check_st(ip: str = typer.Option("ALL", "--ip")):
-    """Dump and decode self-trigger registers."""
+    """Dump & decode self-trigger registers."""
     self_trigger_check.check(_parse_ip_list(ip))
 
 
 @check_app.callback(invoke_without_command=True)
-def _check_all(ctx: typer.Context,
-               ip: str = typer.Option("ALL", "--ip")):
+def _check_all(ctx: typer.Context, ip: str = typer.Option("ALL", "--ip")):
     """
-    *If no sub-command is given* this runs the **full** suite.
+    If no sub-command is given, run the **full** suite.
     """
     ips = _parse_ip_list(ip)
     if ctx.invoked_subcommand:
         return
-
     datamodes_check.run(ips)
     endpoints.verify(ips)
     timestamp.check(ips)
     counters.spy(ips)
     analog_check.run(ips)
+    bias_conf.check_bias(ips)
+    bias_conf.check_trim(ips)
     self_trigger_check.check(ips)
-
     typer.echo("✅  All checks finished – inspect output above")
 
-
-# ╭───────────────────────────────────────────╮
-# │ CAPTURE                                   │
-# ╰───────────────────────────────────────────╯
-#
-def _boards_from_json(details: Path) -> list[
-        tuple[int, dict[int, list[int]], set[int]]]:
-    """
-    Parse *details.json* and return **one entry per board**
-
-        [
-          (ip_suffix,
-           {AFE: [ch,…], …},
-           {global_ch,…}          # inverted channels
-          ),
-          …
-        ]
-    """
+# ╭──────────────────────────────────────────────────────────────────────────╮
+# │ CAPTURE                                                                 │
+# ╰──────────────────────────────────────────────────────────────────────────╯
+def _channels_from_json(details: Path) -> tuple[int, Dict[int, List[int]]]:
     data = json.loads(details.read_text())
-    boards: list[tuple[int, dict[int, list[int]], set[int]]] = []
-
-    for dev in data["devices"]:
-        full_ip = str(ipaddress.ip_address(dev["ip"]))
-        suf     = ip_suffix(full_ip)
-
-        # ---- channels per AFE -------------------------------------------
-        ch_map: dict[int, list[int]] = {}
-        for idx in dev["channels"]["indices"]:
-            afe, ch = divmod(idx, 8)
-            ch_map.setdefault(afe, []).append(ch)
-        for lst in ch_map.values():
-            lst.sort()
-
-        # ---- digital inverter mask --------------------------------------
-        inv_set: set[int] = set(
-            dev.get("self_trigger", {}).get("enable_inverter", [])
-        )
-
-        boards.append((suf, ch_map, inv_set))
-
-    return boards
+    dev  = data["devices"][0]
+    full_ip = str(ipaddress.ip_address(dev["ip"]))
+    mapping: Dict[int, List[int]] = {}
+    for idx in dev["channels"]["indices"]:
+        afe, ch = divmod(idx, 8)
+        mapping.setdefault(afe, []).append(ch)
+    for v in mapping.values():
+        v.sort()
+    return ip_suffix(full_ip), mapping
 
 
+def _channels_from_py(file: Path) -> Dict[int, List[int]]:
+    spec = spec_from_file_location("ch_cfg", file)
+    mod  = module_from_spec(spec)                     # type: ignore[arg-type]
+    spec.loader.exec_module(mod)                      # type: ignore[union-attr]
+    return getattr(mod, "channels_to_acquire")
 
-# ------------------------------------------------------------------
+
 @capture_app.command("plotly")
 def cap_plotly(
-    # ----- where to read IP & channels ----------------------------
     details: Path = typer.Option(
         None, "--details", exists=True, readable=True,
-        help="details.json containing IP & channel list",
+        help="details.json with IP & channel list",
     ),
     channels_file: Path = typer.Option(
         None, "--channels-file", exists=True, readable=True,
         help="Python file exporting `channels_to_acquire`",
     ),
     ip: int = typer.Option(
-        None, "--ip",
-        help="Endpoint suffix (ignored when --details is used)",
+        None, "--ip", help="Endpoint suffix (ignored with --details)",
     ),
-    # ----- acquisition parameters ---------------------------------
-    samples: int = typer.Option(1000, "--samples", help="# ADC samples"),
-    n_wf:    int = typer.Option(10,   "--n-wf",    help="# wave-forms / ch"),
-    # ----- output --------------------------------------------------
-    html: str = typer.Option("waveforms.html", "--html", help="Output HTML"),
-    # ----- trigger -------------------------------------------------
-    trigger: str = typer.Option(
-        "software",
-        "--trigger",
-        help="Trigger strategy:  software | aligned | none",
-        case_sensitive=False,
-    ),
-    save_wf: str | None = typer.Option(
-        None, "--save-wf",
-        help="Optional .npz / .npy / .pkl dump of raw wave-forms",
-    ),
+    samples: int = typer.Option(1000, "--samples"),
+    n_wf:    int = typer.Option(10,   "--n-wf"),
+    trigger: str = typer.Option("software", "--trigger",
+                                help="'software' or 'aligned'"),
+    html: str = typer.Option("waveforms.html", "--html"),
+    save_wf: str | None = typer.Option(None, "--save-wf",
+                                       help="optional .npz raw dump"),
 ) -> None:
-    """
-    Acquire spy-buffer wave-forms and build a polished interactive Plotly
-    figure (time-domain traces + RMS summary table).
-
-    Preferred usage is **--details details.json**; alternatively provide
-    **--channels-file** *and* **--ip**.
-    """
+    """Interactive Plotly viewer of spy-buffer wave-forms."""
     if details:
         ip_suf, ch_map = _channels_from_json(details)
     else:
         if not (channels_file and ip):
-            typer.secho("Need either --details OR (--channels-file AND --ip)",
-                        fg=typer.colors.RED)
-            raise typer.Exit(code=1)
+            typer.secho("Need --details OR (--channels-file AND --ip)",
+                         fg=typer.colors.RED)
+            raise typer.Exit(1)
         ch_map = _channels_from_py(channels_file)
         ip_suf = ip
 
@@ -390,110 +320,70 @@ def cap_plotly(
         channels_per_afe = ch_map,
         samples          = samples,
         n_wf             = n_wf,
+        trigger          = trigger,
         html             = html,
-        trigger          = trigger.lower(),
         save_wf          = save_wf,
     )
 
 
 @capture_app.command("live")
 def cap_live(
-    ip: int  = typer.Option(..., "--ip", help="Endpoint suffix"),
-    afe: int = typer.Option(0,  "--afe"),
-    ch:  int = typer.Option(0,  "--ch"),
+    ip: int  = typer.Option(..., "--ip"),
+    afe: int = typer.Option(0,   "--afe"),
+    ch:  int = typer.Option(0,   "--ch"),
     samples: int = typer.Option(1000, "--samples"),
 ):
     """Simple matplotlib live-scroll viewer (Qt backend)."""
     live_plot.run(ip, afe, ch, samples)
 
-
-# ╭───────────────────────────────────────────╮
-# │ CALIBRATE – offsets                       │
-# ╰───────────────────────────────────────────╯
-from daphne_app.calibration import offsets as offsets_calib
-
+# ╭──────────────────────────────────────────────────────────────────────────╮
+# │ CALIBRATE – offsets                                                     │
+# ╰──────────────────────────────────────────────────────────────────────────╯
 @calib_app.command("offsets")
 def calib_offsets(
-    # ── where to get IP & channels ───────────────────────────────────────
-    details: Path = typer.Option(
-        None, "--details", exists=True, readable=True,
-        help="details.json with IP & channel list",
-    ),
-    channels_file: Path = typer.Option(
-        None, "--channels-file", exists=True, readable=True,
-        help="Python file with `channels_to_acquire`",
-    ),
-    ip: int = typer.Option(
-        None, "--ip", help="Endpoint suffix (ignored with --details)",
-    ),
-    # ── algorithm parameters ─────────────────────────────────────────────
-    target:    int = typer.Option(4000, "--target",    help="Target baseline [ADC]"),
-    band:      int = typer.Option(2,    "--band",      help="±band counts tolerance"),
-    samples:   int = typer.Option(4000, "--samples",   help="# ADC samples"),
-    n_wf:      int = typer.Option(3,    "--n-wf",      help="# wave-forms / iter"),
-    max_iter:  int = typer.Option(7,    "--max-iters", help="Maximum iterations"),
-    step_init: int = typer.Option(50,   "--step-init", help="Initial DAC step"),
-    # ── outputs ──────────────────────────────────────────────────────────
-    save_json: Path | None = typer.Option(
-        None, "--save-json", help="Write final DAC map here (.json)",
-    ),
+    details: Path = typer.Option(None, "--details", exists=True, readable=True),
+    channels_file: Path = typer.Option(None, "--channels-file", exists=True, readable=True),
+    ip: int = typer.Option(None, "--ip"),
+    target:   int = typer.Option(4000, "--target"),
+    band:     int = typer.Option(2,    "--band"),
+    samples:  int = typer.Option(4000, "--samples"),
+    n_wf:     int = typer.Option(3,    "--n-wf"),
+    max_iter: int = typer.Option(7,    "--max-iters"),
+    step_init:int = typer.Option(50,   "--step-init"),
+    save_json: Path | None = typer.Option(None, "--save-json"),
 ) -> None:
     """
-    Calibrate PGA **offset DACs** until every channel baseline lies within
+    Calibrate PGA *offset DACs* until every channel baseline lies within
     *±band* ADC counts of *target*.
-
-    **Strategy**
-    1.  Starting DACs are *read from the board* (“RD OFFSET CH \<n>”).
-        Channel inversion comes from *`enable_inverter`* in **details.json**.
-    2.  *Binary-shrink* loop per channel
-        – first move by *step-init* counts
-        – halve the step each time the error changes sign
-        – lock a channel once it is inside the target band.
-    3.  Stop when all channels are locked or **max-iters** is reached.
-        A convergence plot and a full log are written automatically.
-
-    **Example**
-
-    ```bash
-    daphne calibrate offsets --details details.json \\
-                             --target 4000 --band 2 \\
-                             --step-init 50 --n-wf 3 \\
-                             --save-json best_offsets.json
-    ```
     """
-    # ---- resolve boards & channels --------------------------------------
     if details:
-        boards = _boards_from_json(details)
+        full_ip, ch_map, inv_set = offsets_calib.channels_from_json(details)
     else:
         if not (channels_file and ip):
-            typer.secho("Need either --details OR (--channels-file AND --ip)",
+            typer.secho("Need --details OR (--channels-file AND --ip)",
                         fg=typer.colors.RED)
             raise typer.Exit(1)
-        boards = [(ip,
-                   _channels_from_py(channels_file),
-                   set())]                     # no inverter info available
+        ch_map, inv_set = offsets_calib.channels_from_py(channels_file)
+        ip_suf = ip
 
-    # ---- run calibration for every board --------------------------------
-    for ip_suf, ch_map, inv_set in boards:
-        offsets_calib.run(
-            ip_suffix        = ip_suf,
-            channels_per_afe = ch_map,
-            inverted_glob    = inv_set,
-            target           = target,
-            band             = band,
-            samples          = samples,
-            n_wf             = n_wf,
-            max_iters        = max_iter,
-            step_init        = step_init,
-            save_json        = save_json,
-        )
+    offsets_calib.run(
+        full_ip          = full_ip,
+        channels_per_afe = ch_map,
+        inverted_glob    = inv_set,
+        target           = target,
+        band             = band,
+        samples          = samples,
+        n_wf             = n_wf,
+        max_iters        = max_iter,
+        step_init        = step_init,
+        save_json        = save_json,
+    )
 
-# ╭───────────────────────────────────────────╮
-# │ Entry-point for  “python -m daphne_app”   │
-# ╰───────────────────────────────────────────╯
+# ╭──────────────────────────────────────────────────────────────────────────╮
+# │ Entry-point for  “python -m daphne_app”                                  │
+# ╰──────────────────────────────────────────────────────────────────────────╯
 def main() -> None:
     app()
 
-
-if __name__ == "__main__":   # pragma: no cover
+if __name__ == "__main__":     # pragma: no cover
     main()
