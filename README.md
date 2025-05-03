@@ -116,7 +116,7 @@ print("✅  Wave-form saved to AFE0_CH0.npz")
 
 ````
 
-##3 · Mean FFT (20 averages) and PNG export
+## 3 · Mean FFT (20 averages) and PNG export
 ```python
 """
 Compute the mean FFT of 20 spy-buffer captures (AFE0 / CH0),
