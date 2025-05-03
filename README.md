@@ -116,6 +116,35 @@ print("✅  Wave-form saved to AFE0_CH0.npz")
 
 ````
 
+##3 · Mean FFT (20 averages) and PNG export
+```python
+"""
+Compute the mean FFT of 20 spy-buffer captures (AFE0 / CH0),
+display the plot and save the spectrum to a PNG.
+"""
+import numpy as np
+from daphne_app.hardware.daphne import Daphne
+
+dev  = Daphne("10.73.137.107")
+
+waves = [dev.read_waveform(0, 0, samples=1000, self_trigger=True)
+         for _ in range(20)]
+
+# Compute + plot + save
+freq, mag_dbfs, rms = Daphne.compute_mean_fft(
+    waves,
+    dt=16e-9,
+    plot=True,
+    save_path="fft_AFE0_CH0.png"
+)
+
+print(f"RMS amplitude  = {rms:.3f} ADC counts")
+print("📈  Spectrum saved to fft_AFE0_CH0.png")
+dev.close()
+
+```
+
+
 *Trigger modes*:  
 *software* ⇒ write 0x2000 once per read.  
 *aligned*  ⇒ write 0x2020 & 0x2021 for centred buffer.
