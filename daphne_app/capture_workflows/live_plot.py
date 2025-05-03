@@ -19,8 +19,37 @@ from ..utils.colors  import RED
 
 console = Console()
 
-_COLORS = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red',
-           'tab:purple', 'tab:brown', 'tab:gray', 'tab:olive']
+
+_COLORS = [
+    "tab:blue", "tab:orange", "tab:green", "tab:red",
+    "tab:purple", "tab:brown", "tab:gray", "tab:olive",
+]
+ 
+# ----------------------------------------------------------------------
+# Public shim expected by the Typer CLI
+# ----------------------------------------------------------------------
+def run(ip_suffix: int, afe: int, ch: int, samples: int) -> None:  # noqa: D401
+    """
+    Thin adapter so that *cli.py* can keep calling ``live_plot.run``.
+
+    • converts the single-AFE / single-channel request into the lists that
+      :func:`view` expects
+    • derives an integer `loops` value (50-word bursts) and keeps the read
+      size at 50 words for maximum throughput
+    """
+    if samples % 50:
+        raise ValueError("--samples must be a multiple of 50 for live mode")
+
+    loops = samples // 50
+    view(
+        ip_suffix        = ip_suffix,
+        afes             = [afe],
+        channels         = [ch],
+        loops            = loops,
+        samples_per_read = 50,
+        do_trigger       = True,
+    )
+
 
 
 def _endpoint_ip(suffix: int) -> str:

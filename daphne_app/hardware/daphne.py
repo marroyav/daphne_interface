@@ -12,7 +12,7 @@ import logging
 import re
 from numpy import mean
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from functools import wraps, lru_cache
+from functools import wraps
 import matplotlib.pyplot as plt
 
 # Set up logging
@@ -102,7 +102,6 @@ class Daphne:
     def close(self):
         self.sock.close()
 
-    @lru_cache(maxsize=128)
     def command(self, cmd_string):
         cmd_bytes = [ord(ch) for ch in cmd_string] + [0x0D]
         for i in range(0, len(cmd_bytes), 50):

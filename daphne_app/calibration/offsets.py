@@ -42,7 +42,6 @@ OFFSET_MIN     = 1500
 OFFSET_MAX     = 3000
 DAC_FALLBACK   = 2250
 PRE_PULSE_WIN  = 4000            # samples used for the baseline median
-STEP_MIN       = 1
 OFFSET_RE = re.compile(r"OFFSET DAC REG=\s*(\d+)")
 
 
@@ -115,11 +114,13 @@ def run(
     n_wf: int,
     max_iters: int,
     step_init: int,
+    step_min: int,
     save_json: Path | None,
 ) -> None:
     """Entry-point used by the Typer CLI."""
     dev = Daphne(full_ip)
 
+    STEP_MIN=step_min
     # -------- logging --------
     log_name = f"offset_calib_{full_ip.replace('.', '_')}.log"
     logging.basicConfig(

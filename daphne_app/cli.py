@@ -350,6 +350,7 @@ def calib_offsets(
     n_wf:     int = typer.Option(3,    "--n-wf"),
     max_iter: int = typer.Option(7,    "--max-iters"),
     step_init:int = typer.Option(50,   "--step-init"),
+    step_min :int = typer.Option(4,   "--step-min"),
     save_json: Path | None = typer.Option(None, "--save-json"),
 ) -> None:
     """
@@ -376,6 +377,7 @@ def calib_offsets(
         n_wf             = n_wf,
         max_iters        = max_iter,
         step_init        = step_init,
+        step_min         = step_min,
         save_json        = save_json,
     )
 
