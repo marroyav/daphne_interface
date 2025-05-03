@@ -26,7 +26,7 @@ import numpy as np
 
 # ─────────────────────────── logging ────────────────────────────────
 logger = logging.getLogger(__name__)
-
+ascii_log = logging.getLogger(__name__ + ".ascii")
 # ─────────────────────────── helpers ────────────────────────────────
 def timeout_handler(func):
     """
@@ -129,13 +129,43 @@ class Daphne:
             raise
 
     # ── higher-level helpers ───────────────────────────────────────
-    def command(self, text: str) -> str:
-        """Send an ASCII command terminated by <CR> and return the reply."""
+#    def command(self, text: str) -> str:
+#        """Send an ASCII command terminated by <CR> and return the reply."""
+#        bytes_ = [ord(c) for c in text] + [0x0D]
+#        for i in range(0, len(bytes_), 50):
+#            self.write_fifo(0x9000_0000, bytes_[i : i + 50])
+#        return self._read_command_reply()
+        # ──────────────────────────────────────────────────────────────────
+    #  ASCII command helper
+    # ──────────────────────────────────────────────────────────────────
+    def command(self, text: str, *, debug: bool = False) -> str:
+        """
+        Send an ASCII command terminated by <CR> and return the reply.
+
+        Set *debug=True* (or enable the ``daphne_app.hardware.daphne.ascii``
+        logger at DEBUG level) to see the raw traffic.
+        """
+        # ------------------------------------------------------------------
+        #  >>> outbound
+        # ------------------------------------------------------------------
+        if debug or ascii_log.isEnabledFor(logging.DEBUG):
+            ascii_log.debug("→ %s", text)
+
         bytes_ = [ord(c) for c in text] + [0x0D]
         for i in range(0, len(bytes_), 50):
             self.write_fifo(0x9000_0000, bytes_[i : i + 50])
-        return self._read_command_reply()
 
+        # ------------------------------------------------------------------
+        #  <<< inbound
+        # ------------------------------------------------------------------
+        reply = self._read_command_reply()
+
+        if debug or ascii_log.isEnabledFor(logging.DEBUG):
+            # protect new-lines so they don’t break the log format
+            clean = reply.replace("\n", "\\n")
+            ascii_log.debug("← %s", clean)
+
+        return reply
     # ----------------------------------------------------------------
     # ASCII reply parser
     # ----------------------------------------------------------------

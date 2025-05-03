@@ -1,13 +1,17 @@
 version: 1
+
 formatters:
   tidy:
     format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 
 handlers:
+  # ────────────────────────────── live console ──────────────────────────────
   console:
     class: logging.StreamHandler
     formatter: tidy
-    level: INFO
+    level: DEBUG            # ← see DEBUG too (was INFO)
+
+  # ───────────────────────────── rotating logfile ───────────────────────────
   file:
     class: logging.handlers.RotatingFileHandler
     formatter: tidy
@@ -16,6 +20,17 @@ handlers:
     backupCount: 3
     level: DEBUG
 
+# ───────────────────────────────── loggers ──────────────────────────────────
+# All third-party / stdlib loggers propagate to “root” unless overridden.
+# We add one dedicated logger for raw ASCII traffic so you can switch it
+# on/off independently.
+loggers:
+  daphne_app.hardware.daphne.ascii:       # emitted by Daphne.command(debug=True)
+    level: INFO
+    handlers: [console, file]
+    propagate: false                      # do NOT pass to root again
+
+# “root” gets everything else (INFO by default).
 root:
   level: INFO
   handlers: [console, file]

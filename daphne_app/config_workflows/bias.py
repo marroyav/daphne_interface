@@ -1,18 +1,18 @@
 # daphne_app/config_workflows/bias.py
 """
-Bias-DAC and TRIM helpers
-========================
+Bias-DAC helpers
+================
 
-• configure_bias()  – write the same VBIAS value to all AFEs
+• configure_bias()  – write one VBIASCTRL value to the board
 • configure_trim()  – write per-channel TRIM DACs
-• check_bias()      – read back VBIASx / POWER / TEMP and print a Rich table
-• check_trim()      – dump CH00…CH39 TRIM registers (5 × 8 grid)
+• check_bias()      – merged table: VBIAS, POWER/TEMP  +  BIASSET DACs
+• check_trim()      – grid dump of the 40 TRIM DAC registers
 """
 
 from __future__ import annotations
 
-from typing import Dict, List
 import re
+from typing import Dict, List
 
 import rich
 from rich.table import Table
@@ -20,32 +20,20 @@ from rich.console import Console
 from rich import box
 
 from daphne_app.hardware.daphne import Daphne
-from daphne_app.utils.ip_utils     import endpoint_ip
+from daphne_app.utils.ip_utils import endpoint_ip
 
-# ──────────────────────────────── helpers ─────────────────────────────────
-# ---- TRIM value regex ----------------------------------------------------
+# ────────────────────────── regex helpers ────────────────────────────
 _TRIM_RE = re.compile(
-    r"""(?:TRIM\s+DAC\s+REG|TRIM\s+REG|VALUE)\s*=\s*(\d{1,4})""",
-    re.IGNORECASE | re.VERBOSE,
+    r"(?:TRIM\s+DAC\s+REG|TRIM\s+REG|VALUE)\s*=\s*(\d{1,4})",
+    flags=re.I,
 )
-
-def _parse_trim_value(resp: str) -> int | None:
-    m = _TRIM_RE.search(resp)
-    return int(m.group(1)) if m else None
-
-
-# ---- Bias read-back regex ------------------------------------------------
 _VAR_RE = re.compile(
-    r"(VBIAS[0-4]|POWER\([^)]+\)|TEMP\([^)]+\))\s*=\s*([-+]?\d*\.?\d+)"
+    r"(VBIAS[0-4]|POWER\([-+0-9.a-zA-Z]+\)|TEMP\([^)]+\))"
+    r"\s*=\s*([-+]?\d*\.?\d+)"
 )
+_BIASSET_RE = re.compile(r"BIASSET\s+DAC\s+REG=\s*(\d+)", flags=re.I)
 
-_EXPECTED_ORDER = [
-    "VBIAS0",
-    "VBIAS1",
-    "VBIAS2",
-    "VBIAS3",
-    "VBIAS4",
-]  # rest is appended in natural order
+_EXPECTED_ORDER = [f"VBIAS{i}" for i in range(5)]  # show 0-4 first
 
 
 def _unit_of(var: str) -> str:
@@ -58,90 +46,113 @@ def _unit_of(var: str) -> str:
     return ""
 
 
-# ╭────────────────────────────────────────────────────────────────────────╮
-# │  CONFIGURE                                                             │
-# ╰────────────────────────────────────────────────────────────────────────╯
+# ╭────────────────────────────────────────────────────────────────────╮
+# │ CONFIGURE                                                          │
+# ╰────────────────────────────────────────────────────────────────────╯
 def configure_bias(endpoints: List[int], *, vbias_mv: int = 0) -> None:
-    """
-    Write *vbias_mv* mV into **VBIASCTRL** on every selected board.
-    """
+    """Write *vbias_mv* into VBIASCTRL on every selected board."""
     for suf in endpoints:
-        ip  = endpoint_ip(suf)
-        rich.print(f"[bold]→ set VBIASCTRL {vbias_mv} mV on {ip}[/]")
+        ip = endpoint_ip(suf)
+        rich.print(f"[bold]→ VBIASCTRL {vbias_mv} mV  @ {ip}[/]")
         dev = Daphne(ip)
         dev.command(f"WR VBIASCTRL V {vbias_mv}")
         dev.close()
 
 
-def configure_trim(endpoints: List[int], *, trim_map: Dict[int, int]) -> None:
+def configure_bias(
+    endpoints: list[int],
+    *,
+    vbias_mv: int = 0,
+    bias_set: list[int] | None = None,   # ← new
+) -> None:
     """
-    Write TRIM-DACs; *trim_map* keys are **global** channels 0-39.
+    • Write *VBIASCTRL* once per board
+    • If *bias_set* is given (5 ints), write BIASSET AFE0…4
     """
     for suf in endpoints:
         ip  = endpoint_ip(suf)
-        rich.print(f"[bold]→ write TRIM map on {ip}[/]")
+        rich.print(f"[bold]→ VBIASCTRL {vbias_mv} mV  @ {ip}[/]")
         dev = Daphne(ip)
-        for ch, val in trim_map.items():
-            dev.command(f"WR TRIM CH {ch} V {val}")
+        dev.command(f"WR VBIASCTRL V {vbias_mv}")
+
+        if bias_set:
+            for afe, dac in enumerate(bias_set):
+                dev.command(f"WR BIASSET AFE {afe} V {dac}")
+
         dev.close()
 
-
-# ╭────────────────────────────────────────────────────────────────────────╮
-# │  CHECK                                                                 │
-# ╰────────────────────────────────────────────────────────────────────────╯
-def check_bias(endpoints: List[int]) -> None:
+# ╭────────────────────────────────────────────────────────────────────╮
+# │ CHECK – Bias / Power / Temp / DACs                                 │
+# ╰────────────────────────────────────────────────────────────────────╯
+# ── still in daphne_app/config_workflows/bias.py ────────────────────
+def check_bias(endpoints: list[int]) -> None:
     """
-    Pretty Rich table with VBIAS0-4, POWER(…), TEMP(…) values.
+    Pretty Rich table with VBIAS0-4, POWER/TEMP **and** BIASSET DACs.
     """
     cons = Console()
 
     for suf in endpoints:
-        ip  = endpoint_ip(suf)
+        ip = endpoint_ip(suf)
         dev = Daphne(ip)
-        rsp = dev.command("RD VM ALL")
-        dev.close()
 
+        # --- VM ALL ------------------------------------------------------
+        rsp = dev.command("RD VM ALL")
         vars = {k: float(v) for k, v in _VAR_RE.findall(rsp)}
 
+        # --- BIASSET read-back ------------------------------------------
+        biasset: list[str] = []
+        for afe in range(5):
+            try:
+                txt = dev.command(f"RD BIASSET AFE {afe}")
+                m   = re.search(r"BIASSET DAC REG=\s*(\d+)", txt)
+                biasset.append(m.group(1) if m else "—")
+            except Exception:
+                biasset.append("—")
+
+        dev.close()
+
+        # --- VBIAS + POWER/TEMP table -----------------------------------
         cons.rule(f"[bold blue]Bias read-back {ip}")
+        table = Table()
+        table.add_column("Variable")
+        table.add_column("Value", justify="right")
+        table.add_column("Unit",  justify="center")
 
-        table = Table(box=box.MINIMAL_DOUBLE_HEAD)
-        table.add_column("Variable", style="cyan")
-        table.add_column("Value",   justify="right")
-        table.add_column("Unit",    justify="center")
-
-        # order: VBIAS0…4 first, then everything else
-        ordered_keys = _EXPECTED_ORDER + [k for k in vars if k not in _EXPECTED_ORDER]
-
-        for key in ordered_keys:
+        ordered = _EXPECTED_ORDER + [k for k in vars if k not in _EXPECTED_ORDER]
+        for key in ordered:
             val  = vars.get(key, None)
             unit = _unit_of(key)
-
-            if val is None:
-                table.add_row(key, "—", unit, style="dim")
-            else:
-                style = ""
-                if key.startswith("TEMP") and val > 55:
-                    style = "bold red"
-                table.add_row(key, f"{val:,.1f}", unit, style=style)
-
+            table.add_row(key, f"{val:.1f}" if val is not None else "—", unit)
         cons.print(table)
+
+        # --- BIASSET table ----------------------------------------------
+        bs_tbl = Table(title="BIASSET DACs")
+        bs_tbl.add_column("AFE", justify="right")
+        bs_tbl.add_column("DAC", justify="right")
+        for afe, dac in enumerate(biasset):
+            bs_tbl.add_row(str(afe), dac)
+        cons.print(bs_tbl)
+
+# ╭────────────────────────────────────────────────────────────────────╮
+# │ CHECK – TRIM grid                                                  │
+# ╰────────────────────────────────────────────────────────────────────╯
+def _parse_trim_value(resp: str) -> int | None:
+    m = _TRIM_RE.search(resp)
+    return int(m.group(1)) if m else None
 
 
 def check_trim(endpoints: List[int]) -> None:
-    """
-    Dump TRIM DAC registers (0-4095) in eight-channel rows.
-    """
+    """Dump the 40 TRIM DAC registers in eight-channel rows."""
     for suf in endpoints:
-        ip  = endpoint_ip(suf)
+        ip = endpoint_ip(suf)
         rich.print(f"[bold]→ TRIM read-back {ip}[/]")
 
         dev = Daphne(ip)
-
         row: List[str] = []
+
         for ch in range(40):
             val = _parse_trim_value(dev.command(f"RD TRIM CH {ch}"))
-            row.append(f"{val:02}" if val is not None else "--")
+            row.append(f"{val:04}" if val is not None else "--")
             if ch % 8 == 7:
                 start = ch - 7
                 rich.print(f"  CH{start:02d}-{ch:02d}: {' '.join(row)}")
