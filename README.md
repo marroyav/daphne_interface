@@ -71,6 +71,51 @@ daphne capture plotly --details details.json \
                       --trigger aligned --html wf.html
 ```
 
+<!-- ──────────────────────────────────────────────────────────────────────── -->
+# Working with DAPHNE spy-buffer data
+
+These short recipes show how to **capture raw wave-forms**, **save them to
+disk**, and **plot / store mean-FFT spectra** for any DAPHNE endpoint.
+
+---
+
+## 1 · Quick one-liner from the CLI
+
+Capture **10** wave-forms × **4000** samples from the channels listed in
+`details.json`, trigger the spy-buffer in *aligned* mode, build an
+interactive Plotly viewer **and** keep a compressed copy of the raw data.
+
+```bash
+daphne capture plotly \
+       --details details.json      \
+       --samples 4000              \
+       --n-wf 10                   \
+       --trigger aligned           \
+       --html waveforms.html       \
+       --save-wf waveforms.npz
+```
+
+## 2 · Programmatic capture inside Python
+
+
+```python
+
+import numpy as np
+from daphne_app.hardware.daphne import Daphne
+
+ip_suffix = 7                                  # board 10.73.137.107
+dev = Daphne(f"10.73.137.{100 + ip_suffix}")
+
+wave = dev.read_waveform(afe=0, ch=0,
+                         samples=4000,
+                         self_trigger=True)
+
+np.savez_compressed("AFE0_CH0.npz", wave=wave)
+dev.close()
+print("✅  Wave-form saved to AFE0_CH0.npz")
+
+````
+
 *Trigger modes*:  
 *software* ⇒ write 0x2000 once per read.  
 *aligned*  ⇒ write 0x2020 & 0x2021 for centred buffer.
