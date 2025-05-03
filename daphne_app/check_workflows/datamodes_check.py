@@ -14,7 +14,7 @@ from rich.console import Console
 from ..hardware.daphne import Daphne
 from ..utils.colors import RED
 from ..utils.settings import data_mode   # YAML-driven expectations
-
+from daphne_app.utils.ip_utils import endpoint_ip
 console = Console()
 
 __all__ = ["run"]
@@ -40,7 +40,7 @@ def run(ips: Sequence[int]) -> None:      # noqa: D401
     table.add_column("Mode")
 
     for suffix in ips:
-        full_ip = f"10.73.137.{100 + suffix}"
+        full_ip = endpoint_ip(suffix)
         try:
             dev = Daphne(full_ip)
 

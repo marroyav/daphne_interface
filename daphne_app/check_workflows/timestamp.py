@@ -11,7 +11,7 @@ from typing import Sequence
 from rich.panel import Panel
 from rich.console import Console
 from rich.text import Text
-
+from daphne_app.utils.ip_utils import endpoint_ip
 from ..hardware.daphne import Daphne
 
 console = Console()
@@ -29,7 +29,7 @@ def _analyse(ts: list[int]) -> tuple[str, str]:
 
 def check(ips: Sequence[int]) -> None:                          # noqa: D401
     for suffix in ips:
-        full_ip = f"10.73.137.{100 + suffix}"
+        full_ip = endpoint_ip(suffix)
         try:
             dev = Daphne(full_ip)
             dev.write_reg(0x2000, [1234])          # trigger spy buffers

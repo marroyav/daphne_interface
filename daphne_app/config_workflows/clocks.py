@@ -13,16 +13,12 @@ from typing import Iterable, Sequence
 
 from ..hardware.daphne import Daphne
 from ..utils.colors import GREEN, RED, YELLOW, RESET
+from ..utils.ip_utils import endpoint_ip
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _endpoint_ip(suffix: int) -> str:
-    """Convert the last octet to the full 10.73.137.* address."""
-    return f"10.73.137.{100 + suffix}"
-
 
 def _sleep() -> None:
     """Short, readable delay used after hardware resets."""
@@ -46,7 +42,7 @@ def configure(ips: Sequence[int], *, use_endpoint: int = 0) -> None:
         (0 = local master clock, 1 = timing endpoint lock, etc.).
     """
     for suffix in ips:
-        full_ip = _endpoint_ip(suffix)
+        full_ip = endpoint_ip(suffix)
         print(f"\nConfiguring endpoint {full_ip}")
 
         try:

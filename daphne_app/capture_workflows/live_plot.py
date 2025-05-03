@@ -16,6 +16,7 @@ from rich.console import Console
 
 from ..hardware.daphne import Daphne
 from ..utils.colors  import RED
+from ..utils.ip_utils  import endpoint_ip
 
 console = Console()
 
@@ -24,7 +25,7 @@ _COLORS = [
     "tab:blue", "tab:orange", "tab:green", "tab:red",
     "tab:purple", "tab:brown", "tab:gray", "tab:olive",
 ]
- 
+
 # ----------------------------------------------------------------------
 # Public shim expected by the Typer CLI
 # ----------------------------------------------------------------------
@@ -50,10 +51,6 @@ def run(ip_suffix: int, afe: int, ch: int, samples: int) -> None:  # noqa: D401
         do_trigger       = True,
     )
 
-
-
-def _endpoint_ip(suffix: int) -> str:
-    return f"10.73.137.{100 + suffix}"
 
 
 def view(
@@ -83,7 +80,7 @@ def view(
     do_trigger : bool
         Issue spy-buffer SW trigger before each capture.
     """
-    ip  = _endpoint_ip(ip_suffix)
+    ip  = endpoint_ip(ip_suffix)
     nch = len(channels)
     na  = len(afes)
 

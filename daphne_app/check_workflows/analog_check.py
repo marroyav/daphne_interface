@@ -15,7 +15,7 @@ from rich.panel import Panel
 from ..hardware.daphne import Daphne
 from ..utils.colors import RED, CYAN, RESET
 from ..utils.register_decode import decode   # helper made earlier
-
+from daphne_app.utils.ip_utils import endpoint_ip
 console = Console()
 
 __all__ = ["run"]
@@ -32,7 +32,7 @@ _SPI_MAP = {4: 0x04, 51: 0x33, 52: 0x34}
 # ---------------------------------------------------------------------
 def run(ips: Sequence[int]) -> None:                       # noqa: D401
     for suffix in ips:
-        full_ip = f"10.73.137.{100 + suffix}"
+        full_ip = endpoint_ip(suffix)
         console.print(Panel(f"[bold]{full_ip}[/]", style="cyan"))
 
         try:

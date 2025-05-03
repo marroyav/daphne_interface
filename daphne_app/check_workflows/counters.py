@@ -10,14 +10,14 @@ from rich.console import Console
 
 from ..hardware.daphne import Daphne
 from ..utils.colors import RED
-
+from daphne_app.utils.ip_utils import endpoint_ip
 console = Console()
 __all__ = ["spy"]
 
 
 def spy(ips: Sequence[int]) -> None:                       # noqa: D401
     for suffix in ips:
-        full_ip = f"10.73.137.{100 + suffix}"
+        full_ip = endpoint_ip(suffix)
         try:
             dev = Daphne(full_ip)
 

@@ -14,7 +14,7 @@ from rich.panel import Panel
 
 from ..hardware.daphne import Daphne
 from ..utils.colors import RED, YELLOW, GREEN, RESET
-
+from daphne_app.utils.ip_utils import endpoint_ip
 console = Console()
 __all__ = ["verify"]
 
@@ -44,7 +44,7 @@ def verify(ips: Sequence[int]) -> None:                       # noqa: D401
               expand=False))
 
     for suffix in ips:
-        full_ip = f"10.73.137.{100 + suffix}"
+        full_ip = endpoint_ip(suffix)
 
         try:
             dev = Daphne(full_ip)

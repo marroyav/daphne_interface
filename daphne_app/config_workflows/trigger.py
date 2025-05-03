@@ -23,6 +23,7 @@ from warnings import warn
 from ..hardware.daphne import Daphne
 from ..utils.colors import GREEN, YELLOW, RED, RESET
 from ..utils.settings import is_full_stream
+from daphne_app.utils.ip_utils import endpoint_ip
 
 __all__ = ["configure_full_stream"]
 
@@ -122,7 +123,7 @@ def configure_full_stream(
             )
             continue
 
-        full_ip = f"10.73.137.{100 + suffix}"
+        full_ip = endpoint_ip(suffix)
         print(f"\n--- Trigger matrix for endpoint {full_ip} ---")
 
         try:
