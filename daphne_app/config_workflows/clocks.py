@@ -9,7 +9,7 @@ This module is called by the Typer CLI:
 from __future__ import annotations
 
 import time
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from ..hardware.daphne import Daphne
 from ..utils.colors import GREEN, RED, YELLOW, RESET

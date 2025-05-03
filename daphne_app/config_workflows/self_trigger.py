@@ -39,7 +39,6 @@ def _fmt_mask40(mask: int) -> str:
 # that self_trigger.configure() expects.
 # ----------------------------------------------------------------------
 
-from typing import Any
 
 def _translate_json_kwargs(kw: dict[str, Any]) -> dict[str, Any]:
     """

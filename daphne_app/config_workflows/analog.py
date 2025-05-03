@@ -125,7 +125,7 @@ def read(
 
     for suffix in ips:
         full_ip = endpoint_ip(suffix)
-        dev = ivtools.Daphne(full_ip)
+        dev = Daphne(full_ip)
         console.rule(full_ip)
 
         # channel offsets -------------------------------------------------

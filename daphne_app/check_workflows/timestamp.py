@@ -7,7 +7,7 @@ Yellow border → any 0 or non-consecutive value
 Red border    → read failure
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 from rich.panel import Panel
 from rich.console import Console
 from rich.text import Text
@@ -18,7 +18,7 @@ console = Console()
 __all__ = ["check"]
 
 
-def _analyse(ts: list[int]) -> tuple[str, str]:
+def _analyse(ts: Sequence[int]) -> tuple[str, str]:
     """Return (status, message)."""
     if any(t == 0 for t in ts):
         return "yellow", "⚠ Contains 0"

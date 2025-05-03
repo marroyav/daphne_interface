@@ -1,1 +1,21 @@
-# YAML logging config – fill in as needed
+version: 1
+formatters:
+  tidy:
+    format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: tidy
+    level: INFO
+  file:
+    class: logging.handlers.RotatingFileHandler
+    formatter: tidy
+    filename: daphne.log
+    maxBytes: 2_000_000
+    backupCount: 3
+    level: DEBUG
+
+root:
+  level: INFO
+  handlers: [console, file]

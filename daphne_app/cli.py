@@ -40,6 +40,16 @@ import rich
 from daphne_app.utils.settings   import valid_ips
 from daphne_app.utils.ip_utils   import ip_suffix, endpoint_ip
 
+
+import logging.config, yaml, importlib.resources as pkg
+
+# ------------------------------------------------------------------
+#  Logging config (daphne_app/logging.yaml)
+# ------------------------------------------------------------------
+with pkg.files("daphne_app").joinpath("logging.yaml").open("rb") as fh:
+    logging.config.dictConfig(yaml.safe_load(fh))
+
+
 from daphne_app.config_workflows import (
     clocks,
     analog,

@@ -14,9 +14,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from rich.console import Console
 
-from ..hardware.daphne import Daphne
-from ..utils.colors  import RED
-from ..utils.ip_utils  import endpoint_ip
+from daphne_app.hardware.daphne import Daphne
+from daphne_app.utils.colors  import RED
+from daphne_app.utils.ip_utils  import endpoint_ip
 
 console = Console()
 
