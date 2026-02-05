@@ -185,6 +185,15 @@ def configure_from_json(file: Path):
             gains=gains,
             only_indices=ch_idx,
             attenuators=vg,
+            adc_resolution=common["resolution"],
+            adc_output_format=common["output_format"],
+            adc_sb_first=common["SB_first"],
+            pga_lpf_cut_frequency=common["lpf_cut_frequency"],
+            pga_integrator_disable=common["pga_integrator_disable"],
+            pga_gain=common["pga_gain"],
+            lna_clamp=common["clamp"],
+            lna_integrator_disable=common["lna_integrator_disable"],
+            lna_gain=common["lna_gain"],
         )
 
         # 3. mode registers
